@@ -20,19 +20,25 @@
   textarea{width:100%;min-height:60px}
   label.f{display:block;font-size:13px;color:var(--muted);margin:8px 0 3px}
   label.f + input, label.f + select{width:100%}
-  .btn{padding:8px 16px;border-radius:20px;border:1px solid #b7bec7;background:#fff;cursor:pointer;font:inherit;font-size:14px;font-weight:500}
+  .btn{padding:8px 16px;border-radius:20px;border:1px solid #b7bec7;background:#fff;cursor:pointer;font:inherit;font-size:14px;font-weight:500;color:var(--ink)}
   .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
   .btn.danger{color:var(--red);border-color:#e3b5b5}
+  .btn.small{padding:4px 11px;font-size:13px}
   .btn:disabled{opacity:.45;cursor:not-allowed}
-  .btn:focus-visible,input:focus-visible,select:focus-visible,.chk:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+  .btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.chk:focus-visible,.opt:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
   .note{font-size:13px;color:var(--muted);margin:6px 0}
   .err{color:var(--red)}
   .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-  .tile{background:#fff;border:1px solid var(--line);border-left:4px solid var(--navy);border-radius:10px;padding:10px 12px;cursor:pointer;text-align:left;font:inherit}
+  .tile{background:#fff;border:1px solid var(--line);border-left:4px solid var(--navy);border-radius:10px;padding:10px 12px;cursor:pointer;text-align:left;font:inherit;color:var(--ink)}
   .tile b{display:block;font-size:14px}
   .tile span{font-size:12px;color:var(--muted)}
   .tile.warn{border-left-color:var(--red)}
   .tile.sel{background:var(--blue-bg)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:4px}
+  .stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fbfcfd}
+  .stat .n{font-size:26px;font-weight:700;color:var(--navy);line-height:1.1}
+  .stat .l{font-size:12px;color:var(--muted)}
+  .stat.bad .n{color:var(--red)}
   .tablewrap{overflow-x:auto}
   table{border-collapse:collapse;width:100%;font-size:14px}
   th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -46,6 +52,10 @@
   .s-ext{background:var(--amber-bg);color:var(--amber)}
   .s-done{background:#eceff2;color:#3c4550}
   .s-wait{background:#f1f2f4;color:var(--muted)}
+  .att{display:inline-flex;flex-direction:column;align-items:center;padding:3px 9px;border-radius:8px;font-size:13px;font-weight:700;margin:2px 4px 2px 0;border:none;font-family:inherit;cursor:pointer;line-height:1.2}
+  .att small{font-size:10px;font-weight:500;opacity:.85}
+  .att.pass{background:var(--green-bg);color:var(--green)}
+  .att.fail{background:var(--red-bg);color:var(--red)}
   .bar{height:8px;background:#e7eaee;border-radius:5px;overflow:hidden;min-width:80px}
   .bar i{display:block;height:100%;background:var(--navy)}
   .topic{display:flex;gap:10px;align-items:flex-start;padding:9px 4px;border-bottom:1px solid #eef0f3}
@@ -55,19 +65,38 @@
   .topic .t{flex:1}
   .topic .meta{font-size:12px;color:var(--muted)}
   .topic.late .t b{color:var(--red)}
-  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:8px 0}
-  .tabs button{background:none;border:none;border-bottom:2px solid transparent;padding:8px 12px;font:inherit;font-weight:500;color:var(--muted);cursor:pointer}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:8px 0;overflow-x:auto}
+  .tabs button{background:none;border:none;border-bottom:2px solid transparent;padding:8px 12px;font:inherit;font-weight:500;color:var(--muted);cursor:pointer;white-space:nowrap}
   .tabs button.on{color:var(--navy);border-bottom-color:var(--navy)}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
   @media (max-width:640px){.grid2{grid-template-columns:1fr}.hide-sm{display:none}}
   .hidden{display:none!important}
-  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:20px;font-size:14px;z-index:9}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:20px;font-size:14px;z-index:30}
+  .overlay{position:fixed;inset:0;background:rgba(20,28,38,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+  .modal{background:#fff;border-radius:14px;padding:18px;max-width:680px;width:100%;max-height:90vh;overflow:auto}
+  .linkbox{word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;margin:8px 0}
+  /* Exam mode */
+  .exam{max-width:640px;margin:0 auto}
+  .qnum{font-size:13px;color:var(--muted);margin-bottom:6px}
+  .qtext{font-size:19px;font-weight:600;margin:6px 0 14px;line-height:1.35}
+  .opt{display:block;width:100%;text-align:left;padding:12px 14px;margin:8px 0;border:2px solid var(--line);border-radius:10px;background:#fff;font:inherit;cursor:pointer;color:var(--ink)}
+  .opt.sel{border-color:var(--navy);background:var(--blue-bg);font-weight:600}
+  .exam input.ans{width:100%;margin:5px 0;padding:11px 12px;font-size:16px}
+  .exam textarea.ans{font-size:16px;min-height:90px}
+  .result{text-align:center;padding:28px 18px;border-radius:16px}
+  .result.pass{background:var(--green-bg);color:var(--green)}
+  .result.fail{background:var(--red-bg);color:var(--red)}
+  .result .big{font-size:64px;font-weight:800;line-height:1}
+  .result .word{font-size:24px;font-weight:700;margin-top:6px}
+  .rev{border-bottom:1px solid #eef0f3;padding:10px 0}
+  .rev .ta{background:var(--bg);border-radius:8px;padding:6px 10px;margin:4px 0;white-space:pre-wrap}
+  @media (prefers-reduced-motion:no-preference){.result{animation:pop .35s ease-out}@keyframes pop{from{transform:scale(.92);opacity:0}to{transform:none;opacity:1}}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <a class="banner" id="banner" href="#" target="_blank">Managed by Asif. Tap here for access or any questions.</a>
-  <h1>Training tracker</h1>
+  <h1 id="pageTitle">Training tracker</h1>
 
   <!-- Login -->
   <div class="card" id="gate">
@@ -81,18 +110,30 @@
     <p class="note err hidden" id="pwErr">Incorrect password. Try again.</p>
   </div>
 
+  <!-- Exam mode (opened from an exam link) -->
+  <div id="examView" class="hidden"><div class="exam card" id="examBox"></div></div>
+
   <div id="app" class="hidden">
     <!-- LIST VIEW -->
     <div id="listView">
-      <div class="card" id="outletTilesCard">
+      <div class="card" id="statsCard">
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
-          <h2 style="margin:0">Outlets</h2>
+          <h2 style="margin:0">Overview</h2>
           <span class="note" id="whoAmI"></span>
         </div>
+        <div class="stats" id="stats"></div>
+      </div>
+      <div class="card" id="outletTilesCard">
+        <h2>Outlets</h2>
         <div class="tiles" id="tiles"></div>
       </div>
       <div class="card">
-        <div class="row" style="margin-bottom:10px">
+        <div class="tabs" id="mainTabs">
+          <button class="on" data-t="trainees">Trainees</button>
+          <button data-t="results">Exam results</button>
+          <button data-t="bank" id="bankTabBtn">Exam bank</button>
+        </div>
+        <div class="row" style="margin-bottom:10px" id="filters">
           <select id="fOutlet"></select>
           <select id="fProgram">
             <option value="">All programs</option>
@@ -107,14 +148,37 @@
             <option value="archived">Archived</option>
             <option value="all">All</option>
           </select>
+          <select id="fResult" class="hidden">
+            <option value="all">All exams</option>
+            <option value="fail">Retake needed</option>
+            <option value="pass">Passed</option>
+          </select>
           <span class="grow"></span>
           <button class="btn primary" id="addBtn">Add trainee</button>
         </div>
-        <div class="tablewrap">
+        <div id="tabTrainees" class="tablewrap">
           <table>
             <thead><tr><th>Trainee</th><th class="hide-sm">Outlet</th><th>Program</th><th>Day</th><th>Progress</th><th class="hide-sm">Exams</th><th>Status</th></tr></thead>
             <tbody id="list"></tbody>
           </table>
+        </div>
+        <div id="tabResults" class="tablewrap hidden">
+          <p class="note">Every attempt is shown left to right, oldest first. Tap an online attempt to see the answers.</p>
+          <table>
+            <thead><tr><th>Trainee</th><th class="hide-sm">Outlet</th><th>Exam</th><th>Attempts</th><th>Result</th></tr></thead>
+            <tbody id="results"></tbody>
+          </table>
+        </div>
+        <div id="tabBank" class="hidden">
+          <p class="note">Upload an exam file (.json) to make it available online. Uploading a file with the same exam ID replaces that exam.</p>
+          <div class="row" style="margin-bottom:10px">
+            <input type="file" id="bankFile" accept=".json,application/json">
+          </div>
+          <p class="note err hidden" id="bankErr"></p>
+          <div class="tablewrap"><table>
+            <thead><tr><th>Exam</th><th>Questions</th><th>Total marks</th><th>Pass mark</th><th>Status</th><th></th></tr></thead>
+            <tbody id="bank"></tbody>
+          </table></div>
         </div>
       </div>
     </div>
@@ -143,30 +207,37 @@
       <div class="row" style="margin-bottom:10px"><button class="btn" id="backBtn">Back to list</button></div>
       <div class="card" id="dHead"></div>
       <div class="card">
+        <h2>Exams</h2>
+        <p class="note">Pass mark is 85%. A failed exam must be retaken. Every attempt stays on record.</p>
+        <div class="row" style="margin-bottom:8px">
+          <select id="onlineExam" class="grow"></select>
+          <button class="btn primary" id="makeLink">Create exam link</button>
+        </div>
+        <p class="note hidden" id="noBank">No online exams uploaded yet. Master access can upload them in the Exam bank tab.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Exam</th><th>Attempts</th><th>Result</th></tr></thead>
+          <tbody id="exams"></tbody>
+        </table></div>
+        <details style="margin-top:10px">
+          <summary class="note" style="cursor:pointer">Record a paper exam result instead</summary>
+          <div class="row" style="margin-top:8px">
+            <select id="eName"></select>
+            <input type="date" id="eDate">
+            <input type="number" id="eScore" placeholder="Score" style="width:90px" min="0">
+            <span>/</span>
+            <input type="number" id="eTotal" placeholder="Total" style="width:90px" min="1">
+            <button class="btn" id="eAdd">Add result</button>
+          </div>
+          <p class="note err hidden" id="eErr"></p>
+        </details>
+      </div>
+      <div class="card">
         <div class="row" style="justify-content:space-between">
           <h2 style="margin:0">Training checklist</h2>
           <span class="note">Signing as <b id="signer"></b> · <a href="#" id="changeSigner">change</a></span>
         </div>
         <div class="tabs hidden" id="phaseTabs"></div>
         <div id="checklist"></div>
-      </div>
-      <div class="card">
-        <h2>Exam results</h2>
-        <p class="note">Pass mark is 85%. For a retake, add the same exam again. The latest attempt counts.</p>
-        <div class="tablewrap"><table>
-          <thead><tr><th>Exam</th><th>Date</th><th>Score</th><th>%</th><th>Result</th></tr></thead>
-          <tbody id="exams"></tbody>
-        </table></div>
-        <h3>Add exam result</h3>
-        <div class="row">
-          <select id="eName"></select>
-          <input type="date" id="eDate">
-          <input type="number" id="eScore" placeholder="Score" style="width:90px" min="0">
-          <span>/</span>
-          <input type="number" id="eTotal" placeholder="Total" style="width:90px" min="1">
-          <button class="btn primary" id="eAdd">Add result</button>
-        </div>
-        <p class="note err hidden" id="eErr"></p>
       </div>
       <div class="card" id="dNotes"></div>
       <div class="card" id="dAdmin"></div>
@@ -189,9 +260,12 @@ const firebaseConfig = {
   appId: "1:855394238838:web:deb4d85bbf81b8a96e3a57"
 };
 const db = getFirestore(initializeApp(firebaseConfig));
-const KV = 'kv';                 // same collection the sales tracker uses
-const PREFIX = 'training_t_';    // every training record starts with this - never touches sales data
+const KV = 'kv';                      // same collection the sales tracker uses
+const PREFIX = 'training_t_';         // trainee records
+const EXAM_PREFIX = 'training_exam_'; // uploaded exam papers
+const LINK_PREFIX = 'training_x_';    // one-time exam links
 const PASS = 0.85;
+const LINK_HOURS = 72;
 
 /* ============ TRAINING PLANS ============ */
 const NJ = { name:'New Joiner Server', days:30, extDays:40, sections:[
@@ -217,9 +291,8 @@ const FL_BASE = [
   {title:'Final & validation', d:[30,30], final:true, topics:['Final & Validation Day']}
 ];
 const PHASES = ['Phase 1: Show','Phase 2: Perform','Phase 3: Lead alone'];
-const EXAMS = ['General Information Exam','Menu Knowledge','Sequence of Service','POS & Tablet','Promotions & Pricing','Food Hygiene','Bar Knowledge','Leadership Assessment','Final Validation','Other'];
+const PAPER_EXAMS = ['General Information Exam','Menu Knowledge','Sequence of Service','POS & Tablet','Promotions & Pricing','Food Hygiene','Bar Knowledge','Leadership Assessment','Final Validation','Other'];
 
-// Flatten a program into a list of {key, phase, section, title, from, to}
 function itemsFor(prog){
   const out = [];
   if (prog === 'NJ'){
@@ -231,7 +304,7 @@ function itemsFor(prog){
       if (s.p1only && p>0) return;
       s.topics.forEach((t,ti)=>{
         const title = Array.isArray(t) ? t[0] : t;
-        let d = Array.isArray(t) ? t[1] : s.d;
+        const d = Array.isArray(t) ? t[1] : s.d;
         let from = d[0] + (p===1?29:p===2?59:0), to = d[1] + (p===1?29:p===2?59:0);
         if (s.final && p===1){ from=59; to=60; }
         if (s.final && p===2){ from=89; to=90; }
@@ -245,19 +318,28 @@ const ITEMS = { NJ: itemsFor('NJ'), FL: itemsFor('FL') };
 const LEN = { NJ:30, FL:90 };
 
 /* ============ DATA ============ */
-let access = {}, outlets = [], trainees = [], level = null, myOutlet = null, current = null, phaseTab = 0;
+let access = {}, outlets = [], trainees = [], exams = [], level = null, myOutlet = null, current = null, phaseTab = 0, mainTab = 'trainees';
 
 async function kvGet(key, fresh){
   const snap = fresh ? await getDocFromServer(doc(db,KV,key)) : await getDoc(doc(db,KV,key));
   return snap.exists() ? snap.data().value : null;
 }
 async function kvSet(key, value){ await setDoc(doc(db,KV,key), { value }); }
+async function kvPrefix(prefix){
+  const q = query(collection(db,KV), where(documentId(),'>=',prefix), where(documentId(),'<',prefix+'\uf8ff'));
+  const snap = await getDocs(q); const out = [];
+  snap.forEach(d=>out.push(d.data().value)); return out;
+}
+// Exam papers are stored lightly encoded so the answer key isn't visible at a glance.
+const enc = obj => 'enc:' + btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+const dec = s => JSON.parse(s.startsWith('enc:') ? decodeURIComponent(escape(atob(s.slice(4)))) : s);
 
 async function loadAll(){
-  const q = query(collection(db,KV), where(documentId(),'>=',PREFIX), where(documentId(),'<',PREFIX+'\uf8ff'));
-  const snap = await getDocs(q);
-  trainees = [];
-  snap.forEach(d=>{ try{ trainees.push(JSON.parse(d.data().value)); }catch(e){} });
+  trainees = []; (await kvPrefix(PREFIX)).forEach(v=>{ try{ trainees.push(JSON.parse(v)); }catch(e){} });
+}
+async function loadExams(){
+  exams = []; (await kvPrefix(EXAM_PREFIX)).forEach(v=>{ try{ exams.push(dec(v)); }catch(e){} });
+  exams.sort((a,b)=>a.title.localeCompare(b.title));
 }
 // Always re-reads the latest saved version before changing it, so two phones can't overwrite each other.
 async function saveTrainee(id, change){
@@ -270,7 +352,6 @@ async function saveTrainee(id, change){
   if (i>=0) trainees[i] = t; else trainees.push(t);
   return t;
 }
-
 async function loadOutlets(){
   let list = null;
   try{ const raw = await kvGet('outlet_list'); if (raw) list = JSON.parse(raw); }catch(e){}
@@ -283,25 +364,108 @@ async function loadOutlets(){
 }
 const outletName = id => (outlets.find(o=>o.id===id)||{}).name || id;
 
+/* ============ AUTO MARKING ============ */
+const norm = s => String(s??'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9\u0600-\u06ff\s]/g,' ').replace(/\b(the|a|an)\b/g,' ').replace(/\s+/g,' ').trim();
+function lev(a,b){
+  const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
+  let prev=Array.from({length:n+1},(_,i)=>i);
+  for(let i=1;i<=m;i++){ const cur=[i]; for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1)); prev=cur; }
+  return prev[n];
+}
+const similar = (a,b) => 1 - lev(a,b)/Math.max(a.length,b.length);
+// True if the answer contains the accepted phrase, allowing small spelling mistakes on longer words.
+function matches(answer, accepted){
+  const a = norm(answer), v = norm(accepted);
+  if (!a || !v) return false;
+  const aw = a.split(' '), vw = v.split(' ');
+  if (v.length <= 5 || /^\d+$/.test(v)) return (' '+a+' ').includes(' '+v+' ');   // short words and numbers must be exact
+  if ((' '+a+' ').includes(' '+v+' ')) return true;
+  const tol = 0.8;
+  for (let i=0;i+vw.length<=aw.length;i++){
+    if (similar(aw.slice(i,i+vw.length).join(' '), v) >= tol) return true;
+  }
+  return aw.length < vw.length && similar(a, v) >= tol;
+}
+const variants = x => Array.isArray(x) ? x : [x];
+function scoreQuestion(q, ans){
+  const pts = +q.points || 1;
+  if (ans === undefined || ans === null || ans === '') return 0;
+  if (q.type==='mcq' || q.type==='truefalse') return String(ans)===String(q.answer) ? pts : 0;
+  if (q.type==='text') return variants(q.answers).some(v=>matches(ans, v)) ? pts : 0;
+  if (q.type==='list'){
+    const text = Array.isArray(ans) ? ans.join(' | ') : String(ans);
+    const boxes = Array.isArray(ans) ? ans : [ans];
+    const used = new Set(); let hit = 0;
+    q.items.forEach(item=>{
+      const bi = boxes.findIndex((b,i)=>!used.has(i) && variants(item).some(v=>matches(b, v)));
+      if (bi>=0){ used.add(bi); hit++; }
+      else if (!Array.isArray(ans) && variants(item).some(v=>matches(text,v))) hit++;
+    });
+    const need = q.need || q.items.length;
+    return Math.round(Math.min(hit, need) / need * pts * 100) / 100;
+  }
+  return 0;
+}
+const totalPoints = ex => ex.questions.reduce((s,q)=>s+(+q.points||1),0);
+function answerText(q, a){
+  if (a===undefined || a===null || a==='') return '(no answer)';
+  if (q.type==='mcq') return q.options[a] ?? String(a);
+  if (q.type==='truefalse') return a==='true'?'True':'False';
+  if (Array.isArray(a)) return a.filter(x=>x).join('\n') || '(no answer)';
+  return String(a);
+}
+function correctText(q){
+  if (q.type==='mcq') return q.options[q.answer];
+  if (q.type==='truefalse') return String(q.answer)==='true'?'True':'False';
+  if (q.type==='text') return variants(q.answers).join(' / ');
+  if (q.type==='list') return q.items.map(i=>variants(i)[0]).join(', ') + (q.need?` (any ${q.need})`:'');
+  return '';
+}
+function validateExam(ex){
+  if (!ex || typeof ex!=='object') return 'The file is not a valid exam file.';
+  if (!ex.id || !ex.title) return 'The exam file needs an "id" and a "title".';
+  if (!Array.isArray(ex.questions) || !ex.questions.length) return 'The exam file has no questions.';
+  for (let i=0;i<ex.questions.length;i++){
+    const q = ex.questions[i], n = 'Question '+(i+1);
+    if (!q.q) return n+' has no question text.';
+    if (!['mcq','truefalse','text','list'].includes(q.type)) return n+' has an unknown type "'+q.type+'". Use mcq, truefalse, text or list.';
+    if (q.type==='mcq' && (!Array.isArray(q.options) || q.answer===undefined || !q.options[q.answer])) return n+' needs "options" and the index of the correct "answer".';
+    if (q.type==='truefalse' && typeof q.answer!=='boolean') return n+' needs "answer": true or false.';
+    if (q.type==='text' && !q.answers) return n+' needs accepted "answers".';
+    if (q.type==='list' && (!Array.isArray(q.items) || !q.items.length)) return n+' needs a list of "items".';
+  }
+  return null;
+}
+
 /* ============ CALCULATIONS ============ */
 const pad = n => String(n).padStart(2,'0');
 const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
 function parseDate(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); }
 function fmtDate(s){ if(!s) return ''; return parseDate(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
+function fmtShort(s){ if(!s) return ''; return parseDate(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
 function dayOf(t){ return Math.floor((parseDate(todayStr()) - parseDate(t.start)) / 86400000) + 1; }
+const pctOf = e => e.score / e.total;
+const fmtPct = p => Math.round(p*1000)/10 + '%';
 
+// Groups a trainee's attempts by exam, oldest first.
+function examGroups(t){
+  const g = {};
+  (t.exams||[]).forEach((e,idx)=>{ (g[e.name] = g[e.name] || []).push({...e, idx}); });
+  return Object.entries(g).map(([name, attempts])=>{
+    attempts.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || a.idx-b.idx);
+    const last = attempts[attempts.length-1];
+    return { name, attempts, passed: pctOf(last) >= PASS };
+  });
+}
 function examSummary(t){
-  const latest = {};
-  (t.exams||[]).forEach(e=>{ latest[e.name] = e; }); // stored in order, so last one wins
-  const list = Object.values(latest);
-  const passed = list.filter(e=>e.score/e.total >= PASS).length;
-  return { count:list.length, passed, failed:list.length-passed };
+  const g = examGroups(t);
+  return { count:g.length, passed:g.filter(x=>x.passed).length, failed:g.filter(x=>!x.passed).length };
 }
 function calc(t){
   const items = ITEMS[t.program], done = t.topics||{};
   const day = dayOf(t);
   const doneCount = items.filter(i=>done[i.key]).length;
-  const late = items.filter(i=>!done[i.key] && i.to <= day-2);  // 2-day grace
+  const late = items.filter(i=>!done[i.key] && i.to <= day-2);
   const ex = examSummary(t);
   const allDone = doneCount === items.length;
   let status, cls;
@@ -312,6 +476,7 @@ function calc(t){
   else if (t.program==='NJ' && day > NJ.days && day <= NJ.extDays){ status='Extension (day '+day+')'; cls='s-ext'; }
   else if (day > (t.program==='NJ'?NJ.extDays:90)){ status='Overdue'; cls='s-behind'; }
   else if (late.length){ status=late.length+' topic'+(late.length>1?'s':'')+' behind'; cls='s-behind'; }
+  else if (ex.failed){ status='Retake needed'; cls='s-behind'; }
   else { status='On track'; cls='s-ok'; }
   return { day, doneCount, total:items.length, pct: doneCount/items.length, late, ex, status, cls, allDone };
 }
@@ -320,7 +485,12 @@ function calc(t){
 const $ = id => document.getElementById(id);
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function show(view){ ['listView','formView','detailView'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); window.scrollTo(0,0); }
-function toast(msg){ const d=document.createElement('div'); d.className='toast'; d.textContent=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),2200); }
+function toast(msg){ const d=document.createElement('div'); d.className='toast'; d.textContent=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),2400); }
+function modal(html){
+  const o=document.createElement('div'); o.className='overlay'; o.innerHTML=`<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
+  o.addEventListener('click', e=>{ if(e.target===o) o.remove(); });
+  document.body.appendChild(o); return o;
+}
 const canManage = () => level==='master' || level==='management';
 function visible(){ return trainees.filter(t => level==='outlet' ? t.outlet===myOutlet : true); }
 function getSigner(){
@@ -328,25 +498,72 @@ function getSigner(){
   if (!n){ n = (prompt('Your name (this is recorded as the buddy sign-off):')||'').trim(); if(n) try{ localStorage.setItem('training_signer',n); }catch(e){} }
   return n;
 }
+function attemptChips(group){
+  return group.attempts.map((a,i)=>{
+    const p = pctOf(a), cls = p>=PASS?'pass':'fail';
+    return `<button class="att ${cls}" data-tid="${esc(a.tid||'')}" data-idx="${a.idx}" title="Attempt ${i+1}${a.auto?' (online)':' (paper)'}">${fmtPct(p)}<small>#${i+1} · ${fmtShort(a.date)}${a.auto?'':' · paper'}</small></button>`;
+  }).join('');
+}
+function bindChips(root){
+  root.querySelectorAll('.att').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const t = trainees.find(x=>x.id===(b.dataset.tid||current?.id)); if (!t) return;
+    showAttempt(t, +b.dataset.idx);
+  });
+}
 
-/* ============ LIST ============ */
+/* ============ OVERVIEW ============ */
+function renderStats(){
+  const fo = $('fOutlet').value;
+  const pool = visible().filter(t=>!t.archived && (!fo || t.outlet===fo));
+  const ongoing = pool.filter(t=>!t.completed), done = pool.filter(t=>t.completed);
+  const topicsDone = ongoing.reduce((s,t)=>s+calc(t).doneCount,0), topicsAll = ongoing.reduce((s,t)=>s+calc(t).total,0);
+  const behind = ongoing.filter(t=>calc(t).cls==='s-behind').length;
+  let attempts=0, passedAttempts=0, retakes=0;
+  pool.forEach(t=>{ (t.exams||[]).forEach(e=>{ attempts++; if(pctOf(e)>=PASS) passedAttempts++; }); retakes += examSummary(t).failed; });
+  const stat = (n,l,bad)=>`<div class="stat ${bad?'bad':''}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  $('stats').innerHTML =
+    stat(ongoing.length,'Trainings ongoing') +
+    stat(topicsAll? Math.round(topicsDone/topicsAll*100)+'%':'-','Average progress of ongoing trainings') +
+    stat(done.length,'Trainings completed') +
+    stat(pool.length? Math.round(done.length/pool.length*100)+'%':'-','Completion rate (completed of all)') +
+    stat(behind,'Trainees behind schedule', behind>0) +
+    stat(attempts? Math.round(passedAttempts/attempts*100)+'%':'-','Exam pass rate (all attempts)') +
+    stat(retakes,'Retakes pending', retakes>0);
+  $('whoAmI').textContent = level==='master'?'Full access':level==='management'?'Management view':outletName(myOutlet);
+}
 function renderTiles(){
   if (level==='outlet'){ $('outletTilesCard').classList.add('hidden'); return; }
   const active = trainees.filter(t=>!t.archived && !t.completed);
   $('tiles').innerHTML = outlets.map(o=>{
     const mine = active.filter(t=>t.outlet===o.id);
     const behind = mine.filter(t=>calc(t).cls==='s-behind').length;
-    return `<button class="tile ${behind?'warn':''} ${$('fOutlet').value===o.id?'sel':''}" data-o="${esc(o.id)}"><b>${esc(o.name)}</b><span>${mine.length} in training${behind?' · '+behind+' behind':''}</span></button>`;
+    return `<button class="tile ${behind?'warn':''} ${$('fOutlet').value===o.id?'sel':''}" data-o="${esc(o.id)}"><b>${esc(o.name)}</b><span>${mine.length} in training${behind?' · '+behind+' need attention':''}</span></button>`;
   }).join('');
   $('tiles').querySelectorAll('.tile').forEach(b=>b.onclick=()=>{ $('fOutlet').value = $('fOutlet').value===b.dataset.o ? '' : b.dataset.o; renderList(); });
 }
+function setTab(t){
+  mainTab = t;
+  $('mainTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.t===t));
+  $('tabTrainees').classList.toggle('hidden', t!=='trainees');
+  $('tabResults').classList.toggle('hidden', t!=='results');
+  $('tabBank').classList.toggle('hidden', t!=='bank');
+  $('filters').classList.toggle('hidden', t==='bank');
+  $('fStatus').classList.toggle('hidden', t!=='trainees');
+  $('fResult').classList.toggle('hidden', t!=='results');
+  $('addBtn').classList.toggle('hidden', t!=='trainees');
+  renderList();
+}
+function filtered(){
+  const fo=$('fOutlet').value, fp=$('fProgram').value;
+  return visible().filter(t=>(!fo || t.outlet===fo) && (!fp || t.program===fp));
+}
 function renderList(){
-  renderTiles();
-  const fo=$('fOutlet').value, fp=$('fProgram').value, fs=$('fStatus').value;
-  let rows = visible().map(t=>({t,c:calc(t)}));
-  rows = rows.filter(({t,c})=>{
-    if (fo && t.outlet!==fo) return false;
-    if (fp && t.program!==fp) return false;
+  renderStats(); renderTiles();
+  if (mainTab==='results') return renderResults();
+  if (mainTab==='bank') return renderBank();
+  const fs=$('fStatus').value;
+  let rows = filtered().map(t=>({t,c:calc(t)})).filter(({t,c})=>{
     if (fs==='archived') return t.archived;
     if (t.archived && fs!=='all') return false;
     if (fs==='active') return !t.completed;
@@ -369,6 +586,65 @@ function renderList(){
     : `<tr><td colspan="7" class="note">No trainees here yet. Use "Add trainee" to register a new joiner or future leader.</td></tr>`;
   $('list').querySelectorAll('tr.click').forEach(r=>r.onclick=()=>openDetail(r.dataset.id));
 }
+function renderResults(){
+  const fr = $('fResult').value; const rows = [];
+  filtered().filter(t=>!t.archived).forEach(t=>examGroups(t).forEach(g=>{
+    if (fr==='fail' && g.passed) return; if (fr==='pass' && !g.passed) return;
+    g.attempts.forEach(a=>a.tid=t.id); rows.push({t,g});
+  }));
+  rows.sort((a,b)=> a.g.passed-b.g.passed || a.t.name.localeCompare(b.t.name));
+  $('results').innerHTML = rows.length ? rows.map(({t,g})=>`<tr>
+      <td><a href="#" data-open="${esc(t.id)}"><b>${esc(t.name)}</b></a></td>
+      <td class="hide-sm">${esc(outletName(t.outlet))}</td>
+      <td>${esc(g.name)}</td>
+      <td>${attemptChips(g)}</td>
+      <td><span class="pill ${g.passed?'s-ok':'s-behind'}">${g.passed?'Passed':'Retake needed'}</span></td></tr>`).join('')
+    : `<tr><td colspan="5" class="note">No exam results yet.</td></tr>`;
+  $('results').querySelectorAll('[data-open]').forEach(a=>a.onclick=e=>{ e.preventDefault(); openDetail(a.dataset.open); });
+  bindChips($('results'));
+}
+
+/* ============ EXAM BANK ============ */
+function renderBank(){
+  $('bankFile').disabled = level!=='master';
+  $('bank').innerHTML = exams.length ? exams.map(ex=>`<tr>
+      <td><b>${esc(ex.title)}</b><div class="note" style="margin:0">ID: ${esc(ex.id)}</div></td>
+      <td>${ex.questions.length}</td><td>${totalPoints(ex)}</td><td>${ex.passMark||85}%</td>
+      <td><span class="pill ${ex.active===false?'s-wait':'s-ok'}">${ex.active===false?'Hidden':'Active'}</span></td>
+      <td>${level==='master'?`<button class="btn small" data-tog="${esc(ex.id)}">${ex.active===false?'Show':'Hide'}</button> `:''}<button class="btn small" data-prev="${esc(ex.id)}">Preview</button></td></tr>`).join('')
+    : `<tr><td colspan="6" class="note">No exams uploaded yet.${level==='master'?' Choose an exam file above to add the first one.':''}</td></tr>`;
+  $('bank').querySelectorAll('[data-tog]').forEach(b=>b.onclick=async ()=>{
+    const ex = exams.find(x=>x.id===b.dataset.tog); ex.active = ex.active===false;
+    await kvSet(EXAM_PREFIX+ex.id, enc(ex)); toast(ex.active?'Exam is now available':'Exam hidden'); renderBank();
+  });
+  $('bank').querySelectorAll('[data-prev]').forEach(b=>b.onclick=()=>{
+    const ex = exams.find(x=>x.id===b.dataset.prev);
+    const m = modal(`<h2>${esc(ex.title)}</h2><p class="note">${ex.questions.length} questions · ${totalPoints(ex)} marks · pass ${ex.passMark||85}%</p>` +
+      ex.questions.map((q,i)=>`<div class="rev"><b>Q${i+1}. ${esc(q.q)}</b> <span class="note">(${q.points||1} mark${(q.points||1)>1?'s':''}, ${q.type})</span>
+        ${q.type==='mcq'?'<div class="note">'+q.options.map(esc).join(' | ')+'</div>':''}
+        <div class="note" style="color:var(--green)">Answer: ${esc(correctText(q))}</div></div>`).join('') +
+      `<div class="row" style="margin-top:12px"><button class="btn" id="mClose">Close</button></div>`);
+    m.querySelector('#mClose').onclick=()=>m.remove();
+  });
+}
+$('bankFile').onchange = async e=>{
+  const f = e.target.files[0]; if (!f) return;
+  $('bankErr').classList.add('hidden');
+  try{
+    const ex = JSON.parse(await f.text());
+    const problem = validateExam(ex);
+    if (problem) throw new Error(problem);
+    const existing = exams.find(x=>x.id===ex.id);
+    if (existing && !confirm(`Replace "${existing.title}" with this new version? Past results stay on record.`)) { e.target.value=''; return; }
+    ex.active = ex.active!==false; ex.uploaded = new Date().toISOString();
+    await kvSet(EXAM_PREFIX+ex.id, enc(ex));
+    await loadExams(); toast('Exam uploaded: '+ex.title); renderBank();
+  }catch(err){
+    $('bankErr').textContent = err instanceof SyntaxError ? 'This file could not be read. Upload the .json exam file.' : err.message;
+    $('bankErr').classList.remove('hidden');
+  }
+  e.target.value='';
+};
 
 /* ============ ADD / EDIT ============ */
 let editingId = null;
@@ -421,6 +697,23 @@ function renderDetail(){
     <p class="note">${c.day>=1?'Today is day '+c.day+' of '+LEN[t.program]+'.':''} ${c.late.length?'<span class="err">'+c.late.length+' topic(s) past their scheduled day.</span>':''}</p>`;
   $('signer').textContent = (()=>{ try{ return localStorage.getItem('training_signer')||'not set'; }catch(e){ return 'not set'; } })();
 
+  // Exams
+  const active = exams.filter(e=>e.active!==false);
+  $('onlineExam').innerHTML = active.map(e=>{
+    const g = examGroups(t).find(x=>x.name===e.title);
+    return `<option value="${esc(e.id)}">${esc(e.title)}${g?(g.passed?' (passed)':' (retake)'):''}</option>`;
+  }).join('');
+  $('noBank').classList.toggle('hidden', active.length>0);
+  $('makeLink').disabled = locked || !active.length; $('onlineExam').disabled = locked || !active.length;
+  const groups = examGroups(t); groups.forEach(g=>g.attempts.forEach(a=>a.tid=t.id));
+  $('exams').innerHTML = groups.length ? groups.map(g=>`<tr><td>${esc(g.name)}</td><td>${attemptChips(g)}</td>
+      <td><span class="pill ${g.passed?'s-ok':'s-behind'}">${g.passed?'Passed':'Retake needed'}</span></td></tr>`).join('')
+    : `<tr><td colspan="3" class="note">No exams taken yet.</td></tr>`;
+  bindChips($('exams'));
+  $('eName').innerHTML = [...new Set([...exams.map(e=>e.title), ...PAPER_EXAMS])].map(e=>`<option>${esc(e)}</option>`).join('');
+  $('eDate').value = todayStr();
+  ['eName','eDate','eScore','eTotal','eAdd'].forEach(id=>$(id).disabled = locked);
+
   // Checklist
   const items = ITEMS[t.program];
   let showItems = items;
@@ -433,7 +726,6 @@ function renderDetail(){
     $('phaseTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{ phaseTab=+b.dataset.p; renderDetail(); });
     showItems = items.filter(x=>x.phase===phaseTab);
   } else $('phaseTabs').classList.add('hidden');
-
   let html='', lastSec='';
   showItems.forEach(i=>{
     if (i.section!==lastSec){ html += `<h3>${esc(i.section)} <span class="note">Day ${i.from===i.to?i.from:i.from+'–'+i.to}</span></h3>`; lastSec=i.section; }
@@ -445,13 +737,6 @@ function renderDetail(){
   });
   $('checklist').innerHTML = html;
   $('checklist').querySelectorAll('.chk').forEach(b=>b.onclick=()=>toggleTopic(b.dataset.k));
-
-  // Exams
-  const ex = t.exams||[];
-  $('exams').innerHTML = ex.length ? ex.map(e=>{ const p=e.score/e.total; return `<tr><td>${esc(e.name)}</td><td>${fmtDate(e.date)}</td><td>${e.score} / ${e.total}</td><td>${Math.round(p*100)}%</td><td><span class="pill ${p>=PASS?'s-ok':'s-behind'}">${p>=PASS?'Pass':'Fail'}</span></td></tr>`; }).join('')
-    : `<tr><td colspan="5" class="note">No exams recorded yet.</td></tr>`;
-  $('eDate').value = todayStr();
-  ['eName','eDate','eScore','eTotal','eAdd'].forEach(id=>$(id).disabled = locked);
 
   // Notes / extension
   $('dNotes').innerHTML = `<h2>Notes${t.program==='NJ'?' and extension':''}</h2>
@@ -466,7 +751,7 @@ function renderDetail(){
   // Admin
   let admin = '<h2>Sign-off</h2>';
   if (t.completed) admin += `<p>Training completed on ${fmtDate(t.completed.d)}, signed off by ${esc(t.completed.by)}.</p>`;
-  else admin += `<p class="note">Sign-off unlocks once every topic is ticked and every recorded exam is passed.</p>`;
+  else admin += `<p class="note">Sign-off unlocks once every topic is ticked and every exam is passed.</p>`;
   admin += '<div class="row">';
   if (canManage() && !t.completed && !t.archived) admin += `<button class="btn primary" id="signOff" ${c.cls==='s-ready'?'':'disabled'}>Sign off training</button>`;
   if (canManage() && t.completed) admin += `<button class="btn" id="reopen">Reopen training</button>`;
@@ -501,22 +786,179 @@ $('eAdd').onclick = async ()=>{
     $('eScore').value=''; $('eTotal').value=''; toast('Result added'); renderDetail();
   }catch(e){ toast('Could not save. Check your internet.'); }
 };
+
+// Create a one-time exam link for this trainee
+$('makeLink').onclick = async ()=>{
+  const ex = exams.find(e=>e.id===$('onlineExam').value); if (!ex) return;
+  const g = examGroups(current).find(x=>x.name===ex.title);
+  if (g && g.passed && !confirm(current.name+' already passed this exam. Create another attempt anyway?')) return;
+  const by = getSigner(); if (!by) return;
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(9)), b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join('');
+  const link = { token, traineeId:current.id, traineeName:current.name, examId:ex.id, title:ex.title, createdBy:by,
+    created:new Date().toISOString(), expires:Date.now()+LINK_HOURS*3600000, answers:{}, status:'open', attempt:(g?g.attempts.length:0)+1 };
+  try{ await kvSet(LINK_PREFIX+token, JSON.stringify(link)); }catch(e){ toast('Could not create the link. Check your internet.'); return; }
+  const url = location.origin + location.pathname + '?exam=' + token;
+  const msg = `Hi ${current.name}, please complete your "${ex.title}" exam here: ${url}\nAnswer carefully. Once you answer a question you can't go back. Pass mark is ${ex.passMark||85}%.`;
+  const m = modal(`<h2>Exam link ready</h2>
+    <p>${esc(ex.title)} for <b>${esc(current.name)}</b>${link.attempt>1?' · attempt '+link.attempt:''}.</p>
+    <div class="linkbox">${esc(url)}</div>
+    <p class="note">The link works once and expires in ${LINK_HOURS} hours.</p>
+    <div class="row">
+      <a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" style="text-decoration:none">Send on WhatsApp</a>
+      <button class="btn" id="mCopy">Copy link</button>
+      <a class="btn" href="${esc(url)}" style="text-decoration:none">Start exam on this device</a>
+      <button class="btn" id="mClose">Close</button>
+    </div>`);
+  m.querySelector('#mCopy').onclick = async ()=>{ try{ await navigator.clipboard.writeText(url); toast('Link copied'); }catch(e){ prompt('Copy this link:', url); } };
+  m.querySelector('#mClose').onclick = ()=>m.remove();
+};
+
+// View one attempt's answers; management can correct marks per question.
+function showAttempt(t, idx){
+  const a = (t.exams||[])[idx]; if (!a) return;
+  const ex = exams.find(e=>e.id===a.examId);
+  const p = pctOf(a);
+  let body = `<h2>${esc(a.name)}</h2><p class="note">${esc(t.name)} · ${fmtDate(a.date)} · ${a.auto?'Online exam':'Paper exam, recorded by '+esc(a.by||'-')}</p>
+    <div class="result ${p>=PASS?'pass':'fail'}" style="padding:14px"><div class="big" style="font-size:40px">${fmtPct(p)}</div><div>${a.score} / ${a.total} marks · ${p>=PASS?'Pass':'Fail'}</div></div>`;
+  const editable = canManage() && a.auto && ex && a.detail;
+  if (a.auto && ex && a.detail){
+    body += ex.questions.map((q,i)=>{
+      const d = a.detail[i] || {}, max = +q.points||1;
+      return `<div class="rev"><b>Q${i+1}. ${esc(q.q)}</b>
+        <div class="ta">${esc(answerText(q, d.a))}</div>
+        <div class="note" style="color:var(--green)">Expected: ${esc(correctText(q))}</div>
+        <div class="row"><span class="note">Marks:</span>${editable?`<input type="number" class="mk" data-i="${i}" value="${d.pts??0}" min="0" max="${max}" step="0.5" style="width:80px">`:`<b>${d.pts??0}</b>`}<span class="note">/ ${max}</span></div></div>`;
+    }).join('');
+  } else if (a.auto) body += '<p class="note">The exam paper for this attempt is no longer in the exam bank, so answers cannot be shown.</p>';
+  body += `<div class="row" style="margin-top:12px">${editable?'<button class="btn primary" id="mSave">Save corrected marks</button>':''}<button class="btn" id="mClose">Close</button></div>`;
+  if (editable) body += '<p class="note">Auto-marking allows small spelling mistakes. If a correct answer was marked wrong, change its marks here.</p>';
+  const m = modal(body);
+  m.querySelector('#mClose').onclick = ()=>m.remove();
+  const s = m.querySelector('#mSave');
+  if (s) s.onclick = async ()=>{
+    const marks = {}; m.querySelectorAll('.mk').forEach(inp=>{ marks[inp.dataset.i] = Math.max(0, Math.min(+inp.max, parseFloat(inp.value)||0)); });
+    const by = getSigner(); if (!by) return;
+    try{
+      const upd = await saveTrainee(t.id, x=>{
+        const e = x.exams[idx]; Object.entries(marks).forEach(([i,v])=>{ e.detail[i].pts = v; });
+        e.score = Math.round(e.detail.reduce((s,d)=>s+(d.pts||0),0)*100)/100; e.corrected = {by, at:new Date().toISOString()};
+      });
+      if (current && current.id===t.id) current = upd;
+      m.remove(); toast('Marks updated');
+      if (!$('detailView').classList.contains('hidden')) renderDetail(); else renderList();
+    }catch(e){ toast('Could not save. Check your internet.'); }
+  };
+}
+
 $('backBtn').onclick = ()=>{ show('listView'); renderList(); };
 $('changeSigner').onclick = e=>{ e.preventDefault(); try{ localStorage.removeItem('training_signer'); }catch(err){} getSigner(); renderDetail(); };
 $('addBtn').onclick = ()=>openForm(null);
-['fOutlet','fProgram','fStatus'].forEach(id=>$(id).onchange=renderList);
+['fOutlet','fProgram','fStatus','fResult'].forEach(id=>$(id).onchange=renderList);
+$('mainTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
+
+/* ============ EXAM MODE (trainee side) ============ */
+let X = null, XEX = null;
+async function runExam(token){
+  $('gate').classList.add('hidden'); $('examView').classList.remove('hidden'); $('pageTitle').textContent='Exam';
+  const box = $('examBox');
+  box.innerHTML = '<p class="note">Loading your exam...</p>';
+  try{
+    const raw = await kvGet(LINK_PREFIX+token, true);
+    if (!raw){ box.innerHTML = '<h2>This exam link is not valid</h2><p class="note">Check the link with your buddy or OIC.</p>'; return; }
+    X = JSON.parse(raw);
+    if (X.status==='done'){ return showResult(X.result.score, X.result.total, X.result.passMark, true); }
+    if (Date.now() > X.expires){ box.innerHTML = '<h2>This exam link has expired</h2><p class="note">Ask your buddy or OIC for a new link.</p>'; return; }
+    const exRaw = await kvGet(EXAM_PREFIX+X.examId);
+    if (!exRaw){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
+    XEX = dec(exRaw);
+  }catch(e){ box.innerHTML = '<h2>Could not load the exam</h2><p class="note">Check your internet and refresh the page.</p>'; return; }
+  const answered = Object.keys(X.answers).length;
+  if (answered===0){
+    box.innerHTML = `<h2>${esc(XEX.title)}</h2>
+      <p>Hello <b>${esc(X.traineeName)}</b>.</p>
+      <p>${XEX.questions.length} questions · ${totalPoints(XEX)} marks · pass mark ${XEX.passMark||85}%</p>
+      <p class="note">Questions come one at a time. Once you submit an answer, it is locked and you cannot go back. Your result shows at the end.</p>
+      <button class="btn primary" id="xStart">Start exam</button>`;
+    $('xStart').onclick = ()=>showQuestion();
+  } else showQuestion();
+}
+function nextIndex(){ for (let i=0;i<XEX.questions.length;i++) if (!(i in X.answers)) return i; return -1; }
+function showQuestion(){
+  const i = nextIndex();
+  if (i<0) return finishExam();
+  const q = XEX.questions[i], n = XEX.questions.length, box = $('examBox');
+  let input = '';
+  if (q.type==='mcq') input = q.options.map((o,k)=>`<button class="opt" data-v="${k}">${esc(o)}</button>`).join('');
+  else if (q.type==='truefalse') input = `<button class="opt" data-v="true">True</button><button class="opt" data-v="false">False</button>`;
+  else if (q.type==='list'){
+    const boxes = q.boxes || q.need || q.items.length;
+    input = `<p class="note">Write ${boxes} answer${boxes>1?'s':''}, one in each box.</p>` + Array.from({length:boxes},(_,k)=>`<input class="ans" data-k="${k}" placeholder="Answer ${k+1}" autocomplete="off">`).join('');
+  }
+  else input = `<textarea class="ans" id="xText" placeholder="Type your answer" autocomplete="off"></textarea>`;
+  box.innerHTML = `<div class="qnum">Question ${i+1} of ${n} · ${q.points||1} mark${(q.points||1)>1?'s':''}</div>
+    <div class="bar"><i style="width:${Math.round(i/n*100)}%"></i></div>
+    <div class="qtext">${esc(q.q)}</div>${input}
+    <div class="row" style="margin-top:14px"><button class="btn primary" id="xNext">${i===n-1?'Submit and finish':'Submit answer'}</button></div>
+    <p class="note err hidden" id="xErr"></p>`;
+  let picked = null;
+  box.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{ picked=b.dataset.v; box.querySelectorAll('.opt').forEach(x=>x.classList.toggle('sel', x===b)); });
+  const first = box.querySelector('input.ans, textarea.ans'); if (first) first.focus();
+  $('xNext').onclick = async ()=>{
+    let ans;
+    if (q.type==='mcq' || q.type==='truefalse') ans = picked;
+    else if (q.type==='list') ans = Array.from(box.querySelectorAll('input.ans')).map(x=>x.value.trim());
+    else ans = $('xText').value.trim();
+    const empty = ans===null || ans==='' || (Array.isArray(ans) && ans.every(x=>!x));
+    if (empty && !confirm('You have not answered. Skip this question? You cannot come back to it.')) return;
+    $('xNext').disabled = true;
+    try{
+      const raw = await kvGet(LINK_PREFIX+X.token, true);   // latest version, so answers can never be overwritten
+      const fresh = JSON.parse(raw);
+      if (fresh.status==='done'){ X=fresh; return showResult(X.result.score, X.result.total, X.result.passMark, true); }
+      if (!(i in fresh.answers)) fresh.answers[i] = empty ? '' : ans;
+      await kvSet(LINK_PREFIX+X.token, JSON.stringify(fresh));
+      X = fresh; showQuestion();
+    }catch(e){ $('xErr').textContent='Could not save your answer. Check your internet and press the button again.'; $('xErr').classList.remove('hidden'); $('xNext').disabled=false; }
+  };
+}
+async function finishExam(){
+  const box = $('examBox'); box.innerHTML = '<p class="note">Marking your exam...</p>';
+  const detail = XEX.questions.map((q,i)=>({ a:X.answers[i], pts: scoreQuestion(q, X.answers[i]) }));
+  const score = Math.round(detail.reduce((s,d)=>s+d.pts,0)*100)/100, total = totalPoints(XEX), passMark = XEX.passMark||85;
+  try{
+    await saveTrainee(X.traineeId, t=>{
+      t.exams = t.exams||[];
+      if (!t.exams.some(e=>e.token===X.token))
+        t.exams.push({ name:XEX.title, examId:XEX.id, date:todayStr(), score, total, auto:true, token:X.token, detail, by:'Online exam' });
+    });
+    X.status='done'; X.result={score,total,passMark}; X.finished=new Date().toISOString();
+    await kvSet(LINK_PREFIX+X.token, JSON.stringify(X));
+    showResult(score, total, passMark, false);
+  }catch(e){
+    box.innerHTML = '<h2>Your answers are saved, but the result could not be recorded</h2><p class="note">Check your internet, then refresh this page to finish.</p>';
+  }
+}
+function showResult(score, total, passMark, again){
+  const p = score/total, pass = p*100 >= passMark;
+  $('examBox').innerHTML = `
+    <div class="result ${pass?'pass':'fail'}" role="status">
+      <div class="big">${fmtPct(p)}</div>
+      <div class="word">${pass?'Passed':'Not passed'}</div>
+      <p>${score} of ${total} marks · pass mark ${passMark}%</p>
+    </div>
+    <p class="note" style="text-align:center;margin-top:12px">${again?'This exam has already been completed. ':''}${pass?'Well done. Your result has been sent to your buddy and manager.':'Your result has been sent to your buddy. They will arrange a retake after more practice.'}</p>`;
+}
 
 /* ============ LOGIN ============ */
 function enter(lv, outletId){
   level=lv; myOutlet=outletId||null;
   $('gate').classList.add('hidden'); $('app').classList.remove('hidden');
-  $('whoAmI').textContent = lv==='master'?'Full access':'Management view';
   const opts = outlets.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
-  $('fOutlet').innerHTML = (lv==='outlet'?'':'<option value="">All outlets</option>') + (lv==='outlet' ? `<option value="${esc(myOutlet)}">${esc(outletName(myOutlet))}</option>` : opts);
+  $('fOutlet').innerHTML = lv==='outlet' ? `<option value="${esc(myOutlet)}">${esc(outletName(myOutlet))}</option>` : '<option value="">All outlets</option>'+opts;
   $('fOutlet').disabled = lv==='outlet';
   $('iOutlet').innerHTML = opts;
-  $('eName').innerHTML = EXAMS.map(e=>`<option>${esc(e)}</option>`).join('');
-  show('listView'); renderList();
+  $('bankTabBtn').classList.toggle('hidden', lv==='outlet');
+  show('listView'); setTab('trainees');
 }
 function tryLogin(){
   const pw=$('pw').value; $('pwErr').classList.add('hidden');
@@ -530,10 +972,12 @@ $('pwGo').onclick = tryLogin;
 $('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
 
 (async ()=>{
+  const token = new URLSearchParams(location.search).get('exam');
+  if (token){ $('banner').classList.add('hidden'); return runExam(token); }
   try{
     const a = await kvGet('access_passwords'); if (a) access = JSON.parse(a);
     if (access.whatsapp) $('banner').href = 'https://wa.me/'+access.whatsapp;
-    await Promise.all([loadOutlets(), loadAll()]);
+    await Promise.all([loadOutlets(), loadAll(), loadExams()]);
     $('loading').classList.add('hidden'); $('pw').disabled=false; $('pwGo').disabled=false; $('pw').focus();
   }catch(e){
     $('loading').textContent = 'Could not connect. Check your internet and refresh the page.';
