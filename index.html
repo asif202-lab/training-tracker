@@ -125,67 +125,33 @@
   <div id="app" class="hidden">
     <!-- LIST VIEW -->
     <div id="listView">
-      <div class="card" id="statsCard">
+      <div class="card">
         <div class="row" style="justify-content:space-between;margin-bottom:4px">
           <h2 style="margin:0">Training overview</h2>
-          <span class="note" id="whoAmI"></span>
+          <div class="row">
+            <button class="btn" id="bankBtn">Exam bank</button>
+            <button class="btn primary" id="addBtn">Add trainee</button>
+          </div>
         </div>
         <p class="note" id="summary" style="margin:0 0 10px"></p>
         <div class="tcards" id="cards"></div>
+        <p class="note" style="margin-top:12px"><a href="#" id="doneToggle"></a></p>
+        <div class="tcards hidden" id="doneCards"></div>
       </div>
+    </div>
+
+    <!-- EXAM BANK -->
+    <div id="bankView" class="hidden">
+      <div class="row" style="margin-bottom:10px"><button class="btn" id="bankBack">Back to overview</button></div>
       <div class="card">
-        <div class="tabs" id="mainTabs">
-          <button class="on" data-t="trainees">Trainees</button>
-          <button data-t="results">Exam results</button>
-          <button data-t="bank" id="bankTabBtn">Exam bank</button>
-        </div>
-        <div class="row" style="margin-bottom:10px" id="filters">
-          <select id="fOutlet"></select>
-          <select id="fProgram">
-            <option value="">All programs</option>
-            <option value="NJ">New Joiner Server (30 days)</option>
-            <option value="FL">Future Leader (90 days)</option>
-          </select>
-          <select id="fStatus">
-            <option value="active">In training</option>
-            <option value="behind">Behind only</option>
-            <option value="ready">Ready for sign-off</option>
-            <option value="done">Completed</option>
-            <option value="archived">Archived</option>
-            <option value="all">All</option>
-          </select>
-          <select id="fResult" class="hidden">
-            <option value="all">All exams</option>
-            <option value="fail">Retake needed</option>
-            <option value="pass">Passed</option>
-          </select>
-          <span class="grow"></span>
-          <button class="btn primary" id="addBtn">Add trainee</button>
-        </div>
-        <div id="tabTrainees" class="tablewrap">
-          <table>
-            <thead><tr><th>Trainee</th><th class="hide-sm">Outlet</th><th>Program</th><th>Day</th><th>Progress</th><th class="hide-sm">Exams</th><th>Status</th></tr></thead>
-            <tbody id="list"></tbody>
-          </table>
-        </div>
-        <div id="tabResults" class="tablewrap hidden">
-          <p class="note">Every attempt is shown left to right, oldest first. Tap an online attempt to see the answers.</p>
-          <table>
-            <thead><tr><th>Trainee</th><th class="hide-sm">Outlet</th><th>Exam</th><th>Attempts</th><th>Result</th></tr></thead>
-            <tbody id="results"></tbody>
-          </table>
-        </div>
-        <div id="tabBank" class="hidden">
-          <p class="note">Upload an exam file (.json) to make it available online. Uploading a file with the same exam ID replaces that exam. Change a pass mark by editing the number; it applies to all results of that exam.</p>
-          <div class="row" style="margin-bottom:10px">
-            <input type="file" id="bankFile" accept=".json,application/json">
-          </div>
-          <p class="note err hidden" id="bankErr"></p>
-          <div class="tablewrap"><table>
-            <thead><tr><th>Exam</th><th>Questions</th><th>Total marks</th><th>Pass mark</th><th>Status</th><th></th></tr></thead>
-            <tbody id="bank"></tbody>
-          </table></div>
-        </div>
+        <h2>Exam bank</h2>
+        <p class="note">Upload an exam file (.json) to make it available online. Uploading a file with the same exam ID replaces that exam. Change a pass mark by editing the number; it applies to all results of that exam.</p>
+        <div class="row" style="margin-bottom:10px"><input type="file" id="bankFile" accept=".json,application/json"></div>
+        <p class="note err hidden" id="bankErr"></p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Exam</th><th>Questions</th><th>Total marks</th><th>Pass mark</th><th>Status</th><th></th></tr></thead>
+          <tbody id="bank"></tbody>
+        </table></div>
       </div>
     </div>
 
@@ -324,7 +290,7 @@ const ITEMS = { NJ: itemsFor('NJ'), FL: itemsFor('FL') };
 const LEN = { NJ:30, FL:90 };
 
 /* ============ DATA ============ */
-let access = {}, outlets = [], trainees = [], exams = [], level = null, myOutlet = null, current = null, phaseTab = 0, mainTab = 'trainees';
+let access = {}, outlets = [], trainees = [], exams = [], level = null, myOutlet = null, current = null, phaseTab = 0;
 
 async function kvGet(key, fresh){
   const snap = fresh ? await getDocFromServer(doc(db,KV,key)) : await getDoc(doc(db,KV,key));
@@ -507,7 +473,7 @@ function calc(t){
 /* ============ UI HELPERS ============ */
 const $ = id => document.getElementById(id);
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function show(view){ ['listView','formView','detailView'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); window.scrollTo(0,0); }
+function show(view){ ['listView','formView','detailView','bankView'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); window.scrollTo(0,0); }
 function toast(msg){ const d=document.createElement('div'); d.className='toast'; d.textContent=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),2400); }
 function modal(html){
   const o=document.createElement('div'); o.className='overlay'; o.innerHTML=`<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
@@ -536,94 +502,49 @@ function bindChips(root){
 }
 
 /* ============ OVERVIEW ============ */
+let showDone = false;
+function estimate(t, c){
+  // Estimated finish date at the trainee's current pace (target date until there is progress to measure).
+  let est = c.targetDate;
+  if (c.pct >= 1) est = todayStr();
+  else if (c.pct > 0 && c.day > 1){
+    const d = parseDate(t.start); d.setDate(d.getDate() + Math.ceil(c.day / c.pct) - 1);
+    const e = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    if (e > est) est = e;
+  }
+  return est;
+}
 function renderOverview(){
-  const fo = $('fOutlet').value;
-  const pool = visible().filter(t=>!t.archived && (!fo || t.outlet===fo));
-  const ongoing = pool.filter(t=>!t.completed).map(t=>({t,c:calc(t)})).filter(x=>x.c.day>=1);
-  const done = pool.filter(t=>t.completed).length;
-  $('summary').textContent = `${ongoing.length} training${ongoing.length===1?'':'s'} ongoing · ${done} completed`;
+  const pool = visible().filter(t=>!t.archived);
+  const ongoing = pool.filter(t=>!t.completed).map(t=>({t,c:calc(t)}));
+  const done = pool.filter(t=>t.completed);
+  const place = level==='outlet' ? ' at '+outletName(myOutlet) : '';
+  $('summary').textContent = `${ongoing.length} training${ongoing.length===1?'':'s'} ongoing${place} · ${done.length} completed`;
   ongoing.sort((a,b)=> (a.c.pct-a.c.expected)-(b.c.pct-b.c.expected));
   $('cards').innerHTML = ongoing.length ? ongoing.map(({t,c})=>{
-    // Estimated finish date at the trainee's current pace (target date until there is progress to measure).
-    let est = c.targetDate;
-    if (c.pct >= 1) est = todayStr();
-    else if (c.pct > 0 && c.day > 1){
-      const d = parseDate(t.start); d.setDate(d.getDate() + Math.ceil(c.day / c.pct) - 1);
-      const e = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-      if (e > est) est = e;
-    }
-    const behind = est > c.targetDate || c.pct + 1e-9 < c.expected;
+    const est = estimate(t,c), notStarted = c.day < 1;
+    const behind = !notStarted && (est > c.targetDate || c.pct + 1e-9 < c.expected);
     return `<button class="tcard ${behind?'behind':''}" data-id="${esc(t.id)}">
       <div class="nm">${esc(t.name)}</div>
-      <div class="ln"><span>Expected completion</span><b class="${est > c.targetDate?'no':''}">${fmtDate(est)}</b></div>
+      <div class="ln"><span>Buddy</span><b>${esc(t.buddy||'-')}</b></div>
+      <div class="ln"><span>${notStarted?'Starts':'Expected completion'}</span><b class="${behind && est > c.targetDate?'no':''}">${fmtDate(notStarted?t.start:est)}</b></div>
       <div class="ln"><span>Completed as of today</span><b class="${behind?'no':'ok'}">${Math.round(c.pct*100)}%</b></div>
       <div class="bar" style="margin-top:6px"><i style="width:${Math.round(c.pct*100)}%;background:${behind?'var(--red)':'var(--green)'}"></i></div>
     </button>`;
-  }).join('') : '<p class="note">No trainings ongoing. Use "Add trainee" below to start one.</p>';
-  $('cards').querySelectorAll('.tcard').forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
-  $('whoAmI').textContent = level==='master'?'Full access':level==='management'?'Management view':outletName(myOutlet);
+  }).join('') : '<p class="note">No trainings ongoing. Tap "Add trainee" to start one.</p>';
+  $('doneToggle').textContent = done.length ? (showDone?'Hide completed trainees':'Show completed trainees ('+done.length+')') : '';
+  $('doneCards').classList.toggle('hidden', !showDone || !done.length);
+  $('doneCards').innerHTML = done.map(t=>`<button class="tcard" style="border-left-color:#9aa4af" data-id="${esc(t.id)}">
+      <div class="nm">${esc(t.name)}</div>
+      <div class="ln"><span>Buddy</span><b>${esc(t.buddy||'-')}</b></div>
+      <div class="ln"><span>Completed on</span><b>${fmtDate(t.completed.d)}</b></div>
+      <div class="ln"><span>Completed</span><b>100%</b></div></button>`).join('');
+  document.querySelectorAll('#cards .tcard, #doneCards .tcard').forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
 }
-function setTab(t){
-  mainTab = t;
-  $('mainTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.t===t));
-  $('tabTrainees').classList.toggle('hidden', t!=='trainees');
-  $('tabResults').classList.toggle('hidden', t!=='results');
-  $('tabBank').classList.toggle('hidden', t!=='bank');
-  $('filters').classList.toggle('hidden', t==='bank');
-  $('fStatus').classList.toggle('hidden', t!=='trainees');
-  $('fResult').classList.toggle('hidden', t!=='results');
-  $('addBtn').classList.toggle('hidden', t!=='trainees');
-  renderList();
-}
-function filtered(){
-  const fo=$('fOutlet').value, fp=$('fProgram').value;
-  return visible().filter(t=>(!fo || t.outlet===fo) && (!fp || t.program===fp));
-}
-function renderList(){
-  renderOverview();
-  if (mainTab==='results') return renderResults();
-  if (mainTab==='bank') return renderBank();
-  const fs=$('fStatus').value;
-  let rows = filtered().map(t=>({t,c:calc(t)})).filter(({t,c})=>{
-    if (fs==='archived') return t.archived;
-    if (t.archived && fs!=='all') return false;
-    if (fs==='active') return !t.completed;
-    if (fs==='behind') return !t.completed && c.cls==='s-behind';
-    if (fs==='ready') return c.cls==='s-ready';
-    if (fs==='done') return t.completed;
-    return true;
-  });
-  rows.sort((a,b)=> (b.c.cls==='s-behind')-(a.c.cls==='s-behind') || a.t.name.localeCompare(b.t.name));
-  $('list').innerHTML = rows.length ? rows.map(({t,c})=>`
-    <tr class="click" data-id="${esc(t.id)}">
-      <td><b>${esc(t.name)}</b><div class="note" style="margin:0">Buddy: ${esc(t.buddy||'-')}</div></td>
-      <td class="hide-sm">${esc(outletName(t.outlet))}</td>
-      <td>${t.program}</td>
-      <td>${c.day<1?'-':Math.min(c.day,LEN[t.program]+(t.program==='NJ'?10:0))+' / '+LEN[t.program]}</td>
-      <td><div class="bar"><i style="width:${Math.round(c.pct*100)}%"></i></div><span class="note">${Math.round(c.pct*100)}%</span></td>
-      <td class="hide-sm">${c.ex.count? c.ex.passed+'/'+c.ex.count+' passed':'-'}</td>
-      <td><span class="pill ${c.cls}">${esc(c.status)}</span></td>
-    </tr>`).join('')
-    : `<tr><td colspan="7" class="note">No trainees here yet. Use "Add trainee" to register a new joiner or future leader.</td></tr>`;
-  $('list').querySelectorAll('tr.click').forEach(r=>r.onclick=()=>openDetail(r.dataset.id));
-}
-function renderResults(){
-  const fr = $('fResult').value; const rows = [];
-  filtered().filter(t=>!t.archived).forEach(t=>examGroups(t).forEach(g=>{
-    if (fr==='fail' && g.passed) return; if (fr==='pass' && !g.passed) return;
-    g.attempts.forEach(a=>a.tid=t.id); rows.push({t,g});
-  }));
-  rows.sort((a,b)=> a.g.passed-b.g.passed || a.t.name.localeCompare(b.t.name));
-  $('results').innerHTML = rows.length ? rows.map(({t,g})=>`<tr>
-      <td><a href="#" data-open="${esc(t.id)}"><b>${esc(t.name)}</b></a></td>
-      <td class="hide-sm">${esc(outletName(t.outlet))}</td>
-      <td>${esc(g.name)}</td>
-      <td>${attemptChips(g)}</td>
-      <td><span class="pill ${g.passed?'s-ok':'s-behind'}">${g.passed?'Passed':'Retake needed'}</span></td></tr>`).join('')
-    : `<tr><td colspan="5" class="note">No exam results yet.</td></tr>`;
-  $('results').querySelectorAll('[data-open]').forEach(a=>a.onclick=e=>{ e.preventDefault(); openDetail(a.dataset.open); });
-  bindChips($('results'));
-}
+const renderList = renderOverview;
+$('doneToggle').onclick = e=>{ e.preventDefault(); showDone=!showDone; renderOverview(); };
+$('bankBtn').onclick = ()=>{ show('bankView'); renderBank(); };
+$('bankBack').onclick = ()=>{ show('listView'); renderOverview(); };
 
 /* ============ EXAM BANK ============ */
 function renderBank(){
@@ -882,8 +803,6 @@ function showAttempt(t, idx){
 $('backBtn').onclick = ()=>{ show('listView'); renderList(); };
 $('changeSigner').onclick = e=>{ e.preventDefault(); try{ localStorage.removeItem('training_signer'); }catch(err){} getSigner(); renderDetail(); };
 $('addBtn').onclick = ()=>openForm(null);
-['fOutlet','fProgram','fStatus','fResult'].forEach(id=>$(id).onchange=renderList);
-$('mainTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
 
 /* ============ EXAM MODE (trainee side) ============ */
 let X = null, XEX = null;
@@ -983,11 +902,9 @@ function enter(lv, outletId){
   level=lv; myOutlet=outletId||null;
   $('gate').classList.add('hidden'); $('app').classList.remove('hidden');
   const opts = outlets.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
-  $('fOutlet').innerHTML = lv==='outlet' ? `<option value="${esc(myOutlet)}">${esc(outletName(myOutlet))}</option>` : '<option value="">All outlets</option>'+opts;
-  $('fOutlet').disabled = lv==='outlet';
   $('iOutlet').innerHTML = opts;
-  $('bankTabBtn').classList.toggle('hidden', lv==='outlet');
-  show('listView'); setTab('trainees');
+  $('bankBtn').classList.toggle('hidden', lv==='outlet');
+  show('listView'); renderOverview();
 }
 function tryLogin(){
   const pw=$('pw').value; $('pwErr').classList.add('hidden');
