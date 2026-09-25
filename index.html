@@ -89,6 +89,15 @@
   .result .big{font-size:64px;font-weight:800;line-height:1}
   .result .word{font-size:24px;font-weight:700;margin-top:6px}
   .rev{border-bottom:1px solid #eef0f3;padding:10px 0}
+  .rev .ta.ok{color:var(--green);background:var(--green-bg)}
+  .rev .ta.no{color:var(--red);background:var(--red-bg)}
+  .tcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+  .tcard{text-align:left;font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-left:5px solid var(--green);border-radius:12px;padding:12px 14px;cursor:pointer}
+  .tcard.behind{border-left-color:var(--red)}
+  .tcard .nm{font-size:16px;font-weight:700}
+  .tcard .sub{font-size:12px;color:var(--muted);margin-bottom:8px}
+  .tcard .ln{display:flex;justify-content:space-between;font-size:14px;margin:3px 0}
+  .tcard .ln b.ok{color:var(--green)} .tcard .ln b.no{color:var(--red)}
   .rev .ta{background:var(--bg);border-radius:8px;padding:6px 10px;margin:4px 0;white-space:pre-wrap}
   @media (prefers-reduced-motion:no-preference){.result{animation:pop .35s ease-out}@keyframes pop{from{transform:scale(.92);opacity:0}to{transform:none;opacity:1}}}
 </style>
@@ -117,15 +126,12 @@
     <!-- LIST VIEW -->
     <div id="listView">
       <div class="card" id="statsCard">
-        <div class="row" style="justify-content:space-between;margin-bottom:8px">
-          <h2 style="margin:0">Overview</h2>
+        <div class="row" style="justify-content:space-between;margin-bottom:4px">
+          <h2 style="margin:0">Training overview</h2>
           <span class="note" id="whoAmI"></span>
         </div>
-        <div class="stats" id="stats"></div>
-      </div>
-      <div class="card" id="outletTilesCard">
-        <h2>Outlets</h2>
-        <div class="tiles" id="tiles"></div>
+        <p class="note" id="summary" style="margin:0 0 10px"></p>
+        <div class="tcards" id="cards"></div>
       </div>
       <div class="card">
         <div class="tabs" id="mainTabs">
@@ -170,7 +176,7 @@
           </table>
         </div>
         <div id="tabBank" class="hidden">
-          <p class="note">Upload an exam file (.json) to make it available online. Uploading a file with the same exam ID replaces that exam.</p>
+          <p class="note">Upload an exam file (.json) to make it available online. Uploading a file with the same exam ID replaces that exam. Change a pass mark by editing the number; it applies to all results of that exam.</p>
           <div class="row" style="margin-bottom:10px">
             <input type="file" id="bankFile" accept=".json,application/json">
           </div>
@@ -366,25 +372,34 @@ const outletName = id => (outlets.find(o=>o.id===id)||{}).name || id;
 
 /* ============ AUTO MARKING ============ */
 const norm = s => String(s??'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9\u0600-\u06ff\s]/g,' ').replace(/\b(the|a|an)\b/g,' ').replace(/\s+/g,' ').trim();
+// Edit distance that counts a swapped pair of letters ("bwol" / "bowl") as one mistake.
 function lev(a,b){
   const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
-  let prev=Array.from({length:n+1},(_,i)=>i);
-  for(let i=1;i<=m;i++){ const cur=[i]; for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1)); prev=cur; }
-  return prev[n];
+  const d=[]; for(let i=0;i<=m;i++){ d[i]=[i]; } for(let j=0;j<=n;j++) d[0][j]=j;
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++){
+    const c = a[i-1]===b[j-1]?0:1;
+    d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+c);
+    if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1]) d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);
+  }
+  return d[m][n];
 }
-const similar = (a,b) => 1 - lev(a,b)/Math.max(a.length,b.length);
-// True if the answer contains the accepted phrase, allowing small spelling mistakes on longer words.
+// Mistakes allowed for a word/phrase of this length: short words 1, longer ones about 1 in 4 letters.
+const allowed = len => len<=3 ? 0 : len<=5 ? 1 : Math.max(2, Math.floor(len/4));
+function closeEnough(x, v){
+  if (x===v) return true;
+  const nx = x.replace(/ /g,''), nv = v.replace(/ /g,'');
+  if (/^\d+$/.test(nv)) return nx===nv;               // numbers must be exact
+  return lev(x,v) <= allowed(nv.length) || lev(nx,nv) <= allowed(nv.length);
+}
+// True if the answer contains the accepted phrase, allowing spelling mistakes.
 function matches(answer, accepted){
   const a = norm(answer), v = norm(accepted);
   if (!a || !v) return false;
+  if ((' '+a+' ').includes(' '+v+' ') || closeEnough(a, v)) return true;
   const aw = a.split(' '), vw = v.split(' ');
-  if (v.length <= 5 || /^\d+$/.test(v)) return (' '+a+' ').includes(' '+v+' ');   // short words and numbers must be exact
-  if ((' '+a+' ').includes(' '+v+' ')) return true;
-  const tol = 0.8;
-  for (let i=0;i+vw.length<=aw.length;i++){
-    if (similar(aw.slice(i,i+vw.length).join(' '), v) >= tol) return true;
-  }
-  return aw.length < vw.length && similar(a, v) >= tol;
+  for (let size=Math.max(1,vw.length-1); size<=vw.length+1; size++)
+    for (let i=0;i+size<=aw.length;i++) if (closeEnough(aw.slice(i,i+size).join(' '), v)) return true;
+  return false;
 }
 const variants = x => Array.isArray(x) ? x : [x];
 function scoreQuestion(q, ans){
@@ -393,13 +408,12 @@ function scoreQuestion(q, ans){
   if (q.type==='mcq' || q.type==='truefalse') return String(ans)===String(q.answer) ? pts : 0;
   if (q.type==='text') return variants(q.answers).some(v=>matches(ans, v)) ? pts : 0;
   if (q.type==='list'){
-    const text = Array.isArray(ans) ? ans.join(' | ') : String(ans);
-    const boxes = Array.isArray(ans) ? ans : [ans];
-    const used = new Set(); let hit = 0;
+    const boxes = (Array.isArray(ans) ? ans : String(ans).split(/\n|,/)).map(b=>b.trim()).filter(Boolean);
+    // Each answer box can count for one item only, and each item only once.
+    const usedBox = new Set(); let hit = 0;
     q.items.forEach(item=>{
-      const bi = boxes.findIndex((b,i)=>!used.has(i) && variants(item).some(v=>matches(b, v)));
-      if (bi>=0){ used.add(bi); hit++; }
-      else if (!Array.isArray(ans) && variants(item).some(v=>matches(text,v))) hit++;
+      const bi = boxes.findIndex((b,i)=>!usedBox.has(i) && variants(item).some(v=>matches(b, v)));
+      if (bi>=0){ usedBox.add(bi); hit++; }
     });
     const need = q.need || q.items.length;
     return Math.round(Math.min(hit, need) / need * pts * 100) / 100;
@@ -445,6 +459,12 @@ function fmtDate(s){ if(!s) return ''; return parseDate(s).toLocaleDateString('e
 function fmtShort(s){ if(!s) return ''; return parseDate(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
 function dayOf(t){ return Math.floor((parseDate(todayStr()) - parseDate(t.start)) / 86400000) + 1; }
 const pctOf = e => e.score / e.total;
+// Pass mark comes from the exam bank (master can change it); 85% if the exam isn't in the bank.
+function passMarkFor(name, examId){
+  const ex = exams.find(x=>(examId && x.id===examId) || x.title===name);
+  return ((ex && +ex.passMark) || 85) / 100;
+}
+const isPass = e => pctOf(e) >= passMarkFor(e.name, e.examId) - 1e-9;
 const fmtPct = p => Math.round(p*1000)/10 + '%';
 
 // Groups a trainee's attempts by exam, oldest first.
@@ -454,7 +474,7 @@ function examGroups(t){
   return Object.entries(g).map(([name, attempts])=>{
     attempts.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || a.idx-b.idx);
     const last = attempts[attempts.length-1];
-    return { name, attempts, passed: pctOf(last) >= PASS };
+    return { name, attempts, passed: isPass(last) };
   });
 }
 function examSummary(t){
@@ -466,6 +486,9 @@ function calc(t){
   const day = dayOf(t);
   const doneCount = items.filter(i=>done[i.key]).length;
   const late = items.filter(i=>!done[i.key] && i.to <= day-2);
+  const expected = Math.min(1, items.filter(i=>i.to <= day).length / items.length);
+  const td = parseDate(t.start); td.setDate(td.getDate() + LEN[t.program] - 1);
+  const targetDate = `${td.getFullYear()}-${pad(td.getMonth()+1)}-${pad(td.getDate())}`;
   const ex = examSummary(t);
   const allDone = doneCount === items.length;
   let status, cls;
@@ -478,7 +501,7 @@ function calc(t){
   else if (late.length){ status=late.length+' topic'+(late.length>1?'s':'')+' behind'; cls='s-behind'; }
   else if (ex.failed){ status='Retake needed'; cls='s-behind'; }
   else { status='On track'; cls='s-ok'; }
-  return { day, doneCount, total:items.length, pct: doneCount/items.length, late, ex, status, cls, allDone };
+  return { day, doneCount, total:items.length, pct: doneCount/items.length, expected, targetDate, late, ex, status, cls, allDone };
 }
 
 /* ============ UI HELPERS ============ */
@@ -500,7 +523,7 @@ function getSigner(){
 }
 function attemptChips(group){
   return group.attempts.map((a,i)=>{
-    const p = pctOf(a), cls = p>=PASS?'pass':'fail';
+    const p = pctOf(a), cls = isPass(a)?'pass':'fail';
     return `<button class="att ${cls}" data-tid="${esc(a.tid||'')}" data-idx="${a.idx}" title="Attempt ${i+1}${a.auto?' (online)':' (paper)'}">${fmtPct(p)}<small>#${i+1} · ${fmtShort(a.date)}${a.auto?'':' · paper'}</small></button>`;
   }).join('');
 }
@@ -513,34 +536,32 @@ function bindChips(root){
 }
 
 /* ============ OVERVIEW ============ */
-function renderStats(){
+function renderOverview(){
   const fo = $('fOutlet').value;
   const pool = visible().filter(t=>!t.archived && (!fo || t.outlet===fo));
-  const ongoing = pool.filter(t=>!t.completed), done = pool.filter(t=>t.completed);
-  const topicsDone = ongoing.reduce((s,t)=>s+calc(t).doneCount,0), topicsAll = ongoing.reduce((s,t)=>s+calc(t).total,0);
-  const behind = ongoing.filter(t=>calc(t).cls==='s-behind').length;
-  let attempts=0, passedAttempts=0, retakes=0;
-  pool.forEach(t=>{ (t.exams||[]).forEach(e=>{ attempts++; if(pctOf(e)>=PASS) passedAttempts++; }); retakes += examSummary(t).failed; });
-  const stat = (n,l,bad)=>`<div class="stat ${bad?'bad':''}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
-  $('stats').innerHTML =
-    stat(ongoing.length,'Trainings ongoing') +
-    stat(topicsAll? Math.round(topicsDone/topicsAll*100)+'%':'-','Average progress of ongoing trainings') +
-    stat(done.length,'Trainings completed') +
-    stat(pool.length? Math.round(done.length/pool.length*100)+'%':'-','Completion rate (completed of all)') +
-    stat(behind,'Trainees behind schedule', behind>0) +
-    stat(attempts? Math.round(passedAttempts/attempts*100)+'%':'-','Exam pass rate (all attempts)') +
-    stat(retakes,'Retakes pending', retakes>0);
+  const ongoing = pool.filter(t=>!t.completed).map(t=>({t,c:calc(t)})).filter(x=>x.c.day>=1);
+  const done = pool.filter(t=>t.completed).length;
+  $('summary').textContent = `${ongoing.length} training${ongoing.length===1?'':'s'} ongoing · ${done} completed`;
+  ongoing.sort((a,b)=> (a.c.pct-a.c.expected)-(b.c.pct-b.c.expected));
+  $('cards').innerHTML = ongoing.length ? ongoing.map(({t,c})=>{
+    // Estimated finish date at the trainee's current pace (target date until there is progress to measure).
+    let est = c.targetDate;
+    if (c.pct >= 1) est = todayStr();
+    else if (c.pct > 0 && c.day > 1){
+      const d = parseDate(t.start); d.setDate(d.getDate() + Math.ceil(c.day / c.pct) - 1);
+      const e = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      if (e > est) est = e;
+    }
+    const behind = est > c.targetDate || c.pct + 1e-9 < c.expected;
+    return `<button class="tcard ${behind?'behind':''}" data-id="${esc(t.id)}">
+      <div class="nm">${esc(t.name)}</div>
+      <div class="ln"><span>Expected completion</span><b class="${est > c.targetDate?'no':''}">${fmtDate(est)}</b></div>
+      <div class="ln"><span>Completed as of today</span><b class="${behind?'no':'ok'}">${Math.round(c.pct*100)}%</b></div>
+      <div class="bar" style="margin-top:6px"><i style="width:${Math.round(c.pct*100)}%;background:${behind?'var(--red)':'var(--green)'}"></i></div>
+    </button>`;
+  }).join('') : '<p class="note">No trainings ongoing. Use "Add trainee" below to start one.</p>';
+  $('cards').querySelectorAll('.tcard').forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
   $('whoAmI').textContent = level==='master'?'Full access':level==='management'?'Management view':outletName(myOutlet);
-}
-function renderTiles(){
-  if (level==='outlet'){ $('outletTilesCard').classList.add('hidden'); return; }
-  const active = trainees.filter(t=>!t.archived && !t.completed);
-  $('tiles').innerHTML = outlets.map(o=>{
-    const mine = active.filter(t=>t.outlet===o.id);
-    const behind = mine.filter(t=>calc(t).cls==='s-behind').length;
-    return `<button class="tile ${behind?'warn':''} ${$('fOutlet').value===o.id?'sel':''}" data-o="${esc(o.id)}"><b>${esc(o.name)}</b><span>${mine.length} in training${behind?' · '+behind+' need attention':''}</span></button>`;
-  }).join('');
-  $('tiles').querySelectorAll('.tile').forEach(b=>b.onclick=()=>{ $('fOutlet').value = $('fOutlet').value===b.dataset.o ? '' : b.dataset.o; renderList(); });
 }
 function setTab(t){
   mainTab = t;
@@ -559,7 +580,7 @@ function filtered(){
   return visible().filter(t=>(!fo || t.outlet===fo) && (!fp || t.program===fp));
 }
 function renderList(){
-  renderStats(); renderTiles();
+  renderOverview();
   if (mainTab==='results') return renderResults();
   if (mainTab==='bank') return renderBank();
   const fs=$('fStatus').value;
@@ -609,13 +630,19 @@ function renderBank(){
   $('bankFile').disabled = level!=='master';
   $('bank').innerHTML = exams.length ? exams.map(ex=>`<tr>
       <td><b>${esc(ex.title)}</b><div class="note" style="margin:0">ID: ${esc(ex.id)}</div></td>
-      <td>${ex.questions.length}</td><td>${totalPoints(ex)}</td><td>${ex.passMark||85}%</td>
+      <td>${ex.questions.length}</td><td>${totalPoints(ex)}</td><td>${level==='master'?`<input type="number" class="pm" data-pm="${esc(ex.id)}" value="${ex.passMark||85}" min="1" max="100" style="width:70px"> %`:(ex.passMark||85)+'%'}</td>
       <td><span class="pill ${ex.active===false?'s-wait':'s-ok'}">${ex.active===false?'Hidden':'Active'}</span></td>
       <td>${level==='master'?`<button class="btn small" data-tog="${esc(ex.id)}">${ex.active===false?'Show':'Hide'}</button> `:''}<button class="btn small" data-prev="${esc(ex.id)}">Preview</button></td></tr>`).join('')
     : `<tr><td colspan="6" class="note">No exams uploaded yet.${level==='master'?' Choose an exam file above to add the first one.':''}</td></tr>`;
   $('bank').querySelectorAll('[data-tog]').forEach(b=>b.onclick=async ()=>{
     const ex = exams.find(x=>x.id===b.dataset.tog); ex.active = ex.active===false;
     await kvSet(EXAM_PREFIX+ex.id, enc(ex)); toast(ex.active?'Exam is now available':'Exam hidden'); renderBank();
+  });
+  $('bank').querySelectorAll('[data-pm]').forEach(inp=>inp.onchange=async ()=>{
+    const v = Math.round(parseFloat(inp.value));
+    if (!(v>=1 && v<=100)){ toast('Enter a pass mark between 1 and 100'); inp.value = exams.find(x=>x.id===inp.dataset.pm).passMark||85; return; }
+    const ex = exams.find(x=>x.id===inp.dataset.pm); ex.passMark = v;
+    try{ await kvSet(EXAM_PREFIX+ex.id, enc(ex)); toast('Pass mark for '+ex.title+' set to '+v+'%'); }catch(e){ toast('Could not save. Check your internet.'); }
   });
   $('bank').querySelectorAll('[data-prev]').forEach(b=>b.onclick=()=>{
     const ex = exams.find(x=>x.id===b.dataset.prev);
@@ -819,21 +846,23 @@ function showAttempt(t, idx){
   const ex = exams.find(e=>e.id===a.examId);
   const p = pctOf(a);
   let body = `<h2>${esc(a.name)}</h2><p class="note">${esc(t.name)} · ${fmtDate(a.date)} · ${a.auto?'Online exam':'Paper exam, recorded by '+esc(a.by||'-')}</p>
-    <div class="result ${p>=PASS?'pass':'fail'}" style="padding:14px"><div class="big" style="font-size:40px">${fmtPct(p)}</div><div>${a.score} / ${a.total} marks · ${p>=PASS?'Pass':'Fail'}</div></div>`;
+    <div class="result ${isPass(a)?'pass':'fail'}" style="padding:14px"><div class="big" style="font-size:40px">${fmtPct(p)}</div><div>${a.score} / ${a.total} marks · pass mark ${Math.round(passMarkFor(a.name,a.examId)*100)}% · ${isPass(a)?'Pass':'Fail'}</div></div>`;
   const editable = canManage() && a.auto && ex && a.detail;
   if (a.auto && ex && a.detail){
     body += ex.questions.map((q,i)=>{
       const d = a.detail[i] || {}, max = +q.points||1;
       return `<div class="rev"><b>Q${i+1}. ${esc(q.q)}</b>
-        <div class="ta">${esc(answerText(q, d.a))}</div>
-        <div class="note" style="color:var(--green)">Expected: ${esc(correctText(q))}</div>
+        <div class="ta ${(d.pts??0) >= max ? 'ok':'no'}">${esc(answerText(q, d.a))}</div>
+        <div class="note">Expected: ${esc(correctText(q))}</div>
         <div class="row"><span class="note">Marks:</span>${editable?`<input type="number" class="mk" data-i="${i}" value="${d.pts??0}" min="0" max="${max}" step="0.5" style="width:80px">`:`<b>${d.pts??0}</b>`}<span class="note">/ ${max}</span></div></div>`;
     }).join('');
   } else if (a.auto) body += '<p class="note">The exam paper for this attempt is no longer in the exam bank, so answers cannot be shown.</p>';
-  body += `<div class="row" style="margin-top:12px">${editable?'<button class="btn primary" id="mSave">Save corrected marks</button>':''}<button class="btn" id="mClose">Close</button></div>`;
+  body += `<div class="row" style="margin-top:12px">${editable?'<button class="btn primary" id="mSave">Save corrected marks</button><button class="btn" id="mRemark">Re-mark automatically</button>':''}<button class="btn" id="mClose">Close</button></div>`;
   if (editable) body += '<p class="note">Auto-marking allows small spelling mistakes. If a correct answer was marked wrong, change its marks here.</p>';
   const m = modal(body);
   m.querySelector('#mClose').onclick = ()=>m.remove();
+  const rm = m.querySelector('#mRemark');
+  if (rm) rm.onclick = ()=>{ m.querySelectorAll('.mk').forEach(inp=>{ const i=+inp.dataset.i; inp.value = scoreQuestion(ex.questions[i], a.detail[i].a); }); toast('Marks recalculated. Press Save to keep them.'); };
   const s = m.querySelector('#mSave');
   if (s) s.onclick = async ()=>{
     const marks = {}; m.querySelectorAll('.mk').forEach(inp=>{ marks[inp.dataset.i] = Math.max(0, Math.min(+inp.max, parseFloat(inp.value)||0)); });
