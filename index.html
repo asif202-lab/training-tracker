@@ -94,6 +94,18 @@
   .tcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
   .tcard{text-align:left;font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-left:5px solid var(--green);border-radius:12px;padding:12px 14px;cursor:pointer}
   .tcard.behind{border-left-color:var(--red)}
+  .sbox{text-align:left;font:inherit;color:var(--ink);background:#fbfcfd;border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}
+  .sbox .n{font-size:26px;font-weight:700;color:var(--navy);line-height:1.1}
+  .sbox .l{font-size:13px;color:var(--muted)}
+  .sbox.total{background:var(--navy);border-color:var(--navy)} .sbox.total .n,.sbox.total .l{color:#fff}
+  .sbox.sel{outline:2px solid var(--navy);outline-offset:1px}
+  .bbox{text-align:left;font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-top:4px solid var(--navy);border-radius:12px;padding:12px 14px;cursor:pointer}
+  .bbox.sel{background:var(--blue-bg)}
+  .bbox .nm{font-size:17px;font-weight:700;margin-bottom:6px}
+  .bbox .ln{display:flex;justify-content:space-between;font-size:14px;margin:3px 0}
+  .bbox .ln b.no{color:var(--red)}
+  .sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:12px}
+  .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px}
   .tcard .nm{font-size:16px;font-weight:700}
   .tcard .sub{font-size:12px;color:var(--muted);margin-bottom:8px}
   .tcard .ln{display:flex;justify-content:space-between;font-size:14px;margin:3px 0}
@@ -133,8 +145,11 @@
             <button class="btn primary" id="addBtn">Add trainee</button>
           </div>
         </div>
-        <p class="note" id="summary" style="margin:0 0 10px"></p>
-        <div class="tcards" id="cards"></div>
+        <p class="note" style="margin:0 0 10px">Training today: <b id="whoTrains"></b> · <a href="#" id="changeTrainer">change</a> · <a href="#" id="logout">Log out</a></p>
+        <div class="sgrid" id="desigBoxes"></div>
+        <div class="bgrid" id="brandBoxes"></div>
+        <p class="note hidden" id="filterNote" style="margin:0 0 8px"></p>
+        <div id="cards"></div>
         <p class="note" style="margin-top:12px"><a href="#" id="doneToggle"></a></p>
         <div class="tcards hidden" id="doneCards"></div>
       </div>
@@ -166,6 +181,8 @@
           <select id="iProg"><option value="NJ">New Joiner Server (30 days)</option><option value="FL">Future Leader (90 days)</option></select></div>
         <div><label class="f" for="iStart">Training start date</label><input type="date" id="iStart"></div>
         <div><label class="f" for="iBuddy">Buddy</label><input id="iBuddy" placeholder="Buddy's name"></div>
+        <div><label class="f" for="iDesig">Designation</label><select id="iDesig"></select></div>
+        <div><label class="f" for="iDesigOther">Designation (if Other)</label><input id="iDesigOther" placeholder="Type designation"></div>
       </div>
       <p class="note err hidden" id="formErr"></p>
       <div class="row" style="margin-top:12px">
@@ -475,17 +492,41 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function show(view){ ['listView','formView','detailView','bankView'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); window.scrollTo(0,0); }
 function toast(msg){ const d=document.createElement('div'); d.className='toast'; d.textContent=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),2400); }
-function modal(html){
+function modal(html, sticky){
   const o=document.createElement('div'); o.className='overlay'; o.innerHTML=`<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
-  o.addEventListener('click', e=>{ if(e.target===o) o.remove(); });
+  if (!sticky) o.addEventListener('click', e=>{ if(e.target===o) o.remove(); });
   document.body.appendChild(o); return o;
 }
 const canManage = () => level==='master' || level==='management';
 function visible(){ return trainees.filter(t => level==='outlet' ? t.outlet===myOutlet : true); }
+// The trainer's name is asked at every login (not remembered), because the trainer can change day to day.
+let signer = '';
 function getSigner(){
-  let n=''; try{ n = localStorage.getItem('training_signer')||''; }catch(e){}
-  if (!n){ n = (prompt('Your name (this is recorded as the buddy sign-off):')||'').trim(); if(n) try{ localStorage.setItem('training_signer',n); }catch(e){} }
-  return n;
+  if (!signer) signer = (prompt('Who is training today? Enter your name:')||'').trim();
+  refreshSigner(); return signer;
+}
+function refreshSigner(){ const v = signer || 'not set'; if ($('whoTrains')) $('whoTrains').textContent = v; if ($('signer')) $('signer').textContent = v; }
+function askTrainer(then){
+  const m = modal(`<h2>Who is training today?</h2>
+    <p class="note">Your name is recorded on every topic, exam link and sign-off you do in this session.</p>
+    <input id="trName" placeholder="Your name" style="width:100%" autocomplete="off">
+    <p class="note err hidden" id="trErr">Enter your name to continue.</p>
+    <div class="row" style="margin-top:10px"><button class="btn primary" id="trGo">Continue</button></div>`, true);
+  const inp = m.querySelector('#trName'); inp.value = signer; inp.focus();
+  const go = ()=>{ const v = inp.value.trim(); if(!v){ m.querySelector('#trErr').classList.remove('hidden'); return; } signer = v; refreshSigner(); m.remove(); if (then) then(); };
+  m.querySelector('#trGo').onclick = go; inp.addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
+}
+// Designations and brands
+const DESIGS = ['Server','Sales Associate','Bartender','Food Runner / Delco','Cashier','Senior Server','Supervisor','OIC','Future Leader','Other'];
+const desigOf = t => t.designation || (t.program==='FL' ? 'Future Leader' : 'Server');
+const BRANDS = ['LBKK','SB','TRD'];
+const BRAND_NAMES = { LBKK:'Little Bangkok', SB:'Superbowl', TRD:'The Red Door', Other:'Other' };
+function brandOf(outletId){
+  const n = norm(outletName(outletId)).replace(/\s/g,'');
+  if (/^(lbkk|lb|littlebangkok)/.test(n)) return 'LBKK';
+  if (/^(sb|superbowl)/.test(n)) return 'SB';
+  if (/^(trd|reddoor|thereddoor)/.test(n) || n.includes('reddoor')) return 'TRD';
+  return 'Other';
 }
 function attemptChips(group){
   return group.attempts.map((a,i)=>{
@@ -514,24 +555,68 @@ function estimate(t, c){
   }
   return est;
 }
+let selBrand = null, selDesig = null;
+function traineeCard({t,c}){
+  const est = estimate(t,c), notStarted = c.day < 1;
+  const behind = !notStarted && (est > c.targetDate || c.pct + 1e-9 < c.expected);
+  return `<button class="tcard ${behind?'behind':''}" data-id="${esc(t.id)}">
+    <div class="nm">${esc(t.name)}</div>
+    <div class="ln"><span>Buddy</span><b>${esc(t.buddy||'-')}</b></div>
+    <div class="ln"><span>${notStarted?'Starts':'Expected completion'}</span><b class="${behind && est > c.targetDate?'no':''}">${fmtDate(notStarted?t.start:est)}</b></div>
+    <div class="ln"><span>Completed as of today</span><b class="${behind?'no':'ok'}">${Math.round(c.pct*100)}%</b></div>
+    <div class="bar" style="margin-top:6px"><i style="width:${Math.round(c.pct*100)}%;background:${behind?'var(--red)':'var(--green)'}"></i></div>
+  </button>`;
+}
+const isBehind = ({t,c}) => c.day>=1 && (estimate(t,c) > c.targetDate || c.pct + 1e-9 < c.expected);
 function renderOverview(){
+  refreshSigner();
   const pool = visible().filter(t=>!t.archived);
-  const ongoing = pool.filter(t=>!t.completed).map(t=>({t,c:calc(t)}));
+  const all = pool.filter(t=>!t.completed).map(t=>({t,c:calc(t),brand:brandOf(t.outlet),desig:desigOf(t)}));
   const done = pool.filter(t=>t.completed);
-  const place = level==='outlet' ? ' at '+outletName(myOutlet) : '';
-  $('summary').textContent = `${ongoing.length} training${ongoing.length===1?'':'s'} ongoing${place} · ${done.length} completed`;
-  ongoing.sort((a,b)=> (a.c.pct-a.c.expected)-(b.c.pct-b.c.expected));
-  $('cards').innerHTML = ongoing.length ? ongoing.map(({t,c})=>{
-    const est = estimate(t,c), notStarted = c.day < 1;
-    const behind = !notStarted && (est > c.targetDate || c.pct + 1e-9 < c.expected);
-    return `<button class="tcard ${behind?'behind':''}" data-id="${esc(t.id)}">
-      <div class="nm">${esc(t.name)}</div>
-      <div class="ln"><span>Buddy</span><b>${esc(t.buddy||'-')}</b></div>
-      <div class="ln"><span>${notStarted?'Starts':'Expected completion'}</span><b class="${behind && est > c.targetDate?'no':''}">${fmtDate(notStarted?t.start:est)}</b></div>
-      <div class="ln"><span>Completed as of today</span><b class="${behind?'no':'ok'}">${Math.round(c.pct*100)}%</b></div>
-      <div class="bar" style="margin-top:6px"><i style="width:${Math.round(c.pct*100)}%;background:${behind?'var(--red)':'var(--green)'}"></i></div>
-    </button>`;
-  }).join('') : '<p class="note">No trainings ongoing. Tap "Add trainee" to start one.</p>';
+
+  // Designation boxes (total first). Tap one to show only that designation.
+  const inBrand = all.filter(x=>!selBrand || x.brand===selBrand);
+  const counts = {}; inBrand.forEach(x=>counts[x.desig]=(counts[x.desig]||0)+1);
+  $('desigBoxes').innerHTML =
+    `<button class="sbox total ${!selDesig?'sel':''}" data-d=""><div class="n">${inBrand.length}</div><div class="l">Trainings ongoing${selBrand?' · '+BRAND_NAMES[selBrand]:''}</div></button>` +
+    Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([d,n])=>`<button class="sbox ${selDesig===d?'sel':''}" data-d="${esc(d)}"><div class="n">${n}</div><div class="l">${esc(d)}</div></button>`).join('');
+  $('desigBoxes').querySelectorAll('.sbox').forEach(b=>b.onclick=()=>{ selDesig = b.dataset.d || null; if (selDesig===b.dataset.d && b.classList.contains('sel') && b.dataset.d) selDesig=null; renderOverview(); });
+
+  // Brand boxes (management and master only)
+  const showBrands = level!=='outlet';
+  $('brandBoxes').classList.toggle('hidden', !showBrands);
+  if (showBrands){
+    const brands = [...BRANDS, ...(all.some(x=>x.brand==='Other')?['Other']:[])];
+    $('brandBoxes').innerHTML = brands.map(br=>{
+      const list = all.filter(x=>x.brand===br && (!selDesig || x.desig===selDesig));
+      const avg = list.length ? Math.round(list.reduce((s,x)=>s+x.c.pct,0)/list.length*100) : 0;
+      const behind = list.filter(isBehind).length;
+      const retakes = list.reduce((s,x)=>s+x.c.ex.failed,0);
+      const doneN = done.filter(t=>brandOf(t.outlet)===br).length;
+      return `<button class="bbox ${selBrand===br?'sel':''}" data-b="${br}">
+        <div class="nm">${esc(BRAND_NAMES[br])}</div>
+        <div class="ln"><span>Ongoing</span><b>${list.length}</b></div>
+        <div class="ln"><span>Average completed</span><b>${list.length?avg+'%':'-'}</b></div>
+        <div class="ln"><span>Behind schedule</span><b class="${behind?'no':''}">${behind}</b></div>
+        <div class="ln"><span>Retakes pending</span><b class="${retakes?'no':''}">${retakes}</b></div>
+        <div class="ln"><span>Completed</span><b>${doneN}</b></div></button>`;
+    }).join('');
+    $('brandBoxes').querySelectorAll('.bbox').forEach(b=>b.onclick=()=>{ selBrand = selBrand===b.dataset.b ? null : b.dataset.b; renderOverview(); });
+  }
+
+  // Trainee cards grouped by brand
+  const shown = all.filter(x=>(!selBrand || x.brand===selBrand) && (!selDesig || x.desig===selDesig));
+  shown.sort((a,b)=> (a.c.pct-a.c.expected)-(b.c.pct-b.c.expected));
+  const parts = [selDesig, selBrand && BRAND_NAMES[selBrand]].filter(Boolean);
+  $('filterNote').classList.toggle('hidden', !parts.length);
+  $('filterNote').innerHTML = parts.length ? `Showing ${esc(parts.join(' · '))} · <a href="#" id="clearSel">show all</a>` : '';
+  const cs = $('clearSel'); if (cs) cs.onclick = e=>{ e.preventDefault(); selBrand=null; selDesig=null; renderOverview(); };
+  const groups = showBrands ? [...BRANDS,'Other'] : [null];
+  $('cards').innerHTML = shown.length ? groups.map(br=>{
+    const g = shown.filter(x=>br===null || x.brand===br); if (!g.length) return '';
+    return (br?`<h3>${esc(BRAND_NAMES[br])}</h3>`:'') + `<div class="tcards">${g.map(traineeCard).join('')}</div>`;
+  }).join('') : '<p class="note">No trainings ongoing here. Tap "Add trainee" to start one.</p>';
+
   $('doneToggle').textContent = done.length ? (showDone?'Hide completed trainees':'Show completed trainees ('+done.length+')') : '';
   $('doneCards').classList.toggle('hidden', !showDone || !done.length);
   $('doneCards').innerHTML = done.map(t=>`<button class="tcard" style="border-left-color:#9aa4af" data-id="${esc(t.id)}">
@@ -541,6 +626,13 @@ function renderOverview(){
       <div class="ln"><span>Completed</span><b>100%</b></div></button>`).join('');
   document.querySelectorAll('#cards .tcard, #doneCards .tcard').forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
 }
+$('changeTrainer').onclick = e=>{ e.preventDefault(); askTrainer(); };
+$('logout').onclick = e=>{
+  e.preventDefault();
+  level=null; myOutlet=null; signer=''; current=null; selBrand=null; selDesig=null; showDone=false;
+  document.querySelectorAll('.overlay').forEach(o=>o.remove());
+  $('app').classList.add('hidden'); $('gate').classList.remove('hidden'); $('pw').value=''; $('pw').focus();
+};
 const renderList = renderOverview;
 $('doneToggle').onclick = e=>{ e.preventDefault(); showDone=!showDone; renderOverview(); };
 $('bankBtn').onclick = ()=>{ show('bankView'); renderBank(); };
@@ -605,6 +697,9 @@ function openForm(t){
   $('iOutlet').disabled = level==='outlet';
   $('iProg').value = t?.program||'NJ'; $('iProg').disabled = !!t;
   $('iStart').value = t?.start || todayStr(); $('iBuddy').value = t?.buddy||'';
+  const dg = t ? desigOf(t) : 'Server';
+  $('iDesig').innerHTML = DESIGS.map(d=>`<option>${esc(d)}</option>`).join('');
+  $('iDesig').value = DESIGS.includes(dg) ? dg : 'Other'; $('iDesigOther').value = DESIGS.includes(dg) ? '' : dg;
   $('formErr').classList.add('hidden');
   show('formView');
 }
@@ -616,7 +711,8 @@ $('formSave').onclick = async ()=>{
     const id = editingId || Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     await saveTrainee(id, t=>{
       if (!t.id){ Object.assign(t,{id, program:$('iProg').value, topics:{}, exams:[], created:new Date().toISOString()}); }
-      Object.assign(t,{ name, empId:$('iEmp').value.trim(), outlet:$('iOutlet').value, start, buddy:$('iBuddy').value.trim() });
+      const dsel = $('iDesig').value, designation = dsel==='Other' ? ($('iDesigOther').value.trim()||'Other') : dsel;
+      Object.assign(t,{ name, empId:$('iEmp').value.trim(), outlet:$('iOutlet').value, start, buddy:$('iBuddy').value.trim(), designation });
     });
     toast(editingId?'Changes saved':'Trainee added');
     editingId ? openDetail(id) : (show('listView'), renderList());
@@ -643,7 +739,7 @@ function renderDetail(){
     <div class="row" style="margin-top:10px"><div class="bar grow"><i style="width:${Math.round(c.pct*100)}%"></i></div>
     <b>${c.doneCount} / ${c.total} topics</b></div>
     <p class="note">${c.day>=1?'Today is day '+c.day+' of '+LEN[t.program]+'.':''} ${c.late.length?'<span class="err">'+c.late.length+' topic(s) past their scheduled day.</span>':''}</p>`;
-  $('signer').textContent = (()=>{ try{ return localStorage.getItem('training_signer')||'not set'; }catch(e){ return 'not set'; } })();
+  refreshSigner();
 
   // Exams
   const active = exams.filter(e=>e.active!==false);
@@ -801,7 +897,7 @@ function showAttempt(t, idx){
 }
 
 $('backBtn').onclick = ()=>{ show('listView'); renderList(); };
-$('changeSigner').onclick = e=>{ e.preventDefault(); try{ localStorage.removeItem('training_signer'); }catch(err){} getSigner(); renderDetail(); };
+$('changeSigner').onclick = e=>{ e.preventDefault(); askTrainer(); };
 $('addBtn').onclick = ()=>openForm(null);
 
 /* ============ EXAM MODE (trainee side) ============ */
@@ -904,7 +1000,8 @@ function enter(lv, outletId){
   const opts = outlets.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
   $('iOutlet').innerHTML = opts;
   $('bankBtn').classList.toggle('hidden', lv==='outlet');
-  show('listView'); renderOverview();
+  signer=''; show('listView'); renderOverview();
+  askTrainer();
 }
 function tryLogin(){
   const pw=$('pw').value; $('pwErr').classList.add('hidden');
