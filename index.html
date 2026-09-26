@@ -109,6 +109,14 @@
   .alert.red{background:var(--red-bg);color:var(--red)} .alert.blue{background:var(--blue-bg);color:var(--navy)} .alert.amber{background:var(--amber-bg);color:var(--amber)}
   .alert.sel{outline:2px solid currentColor;outline-offset:1px}
   .timer{float:right;font-weight:700;color:var(--navy)} .timer.low{color:var(--red)}
+  .lb{width:100%;border-collapse:collapse;font-size:15px}
+  .lb td{padding:8px 6px;border-bottom:1px solid #eef0f3}
+  .lb .rk{width:36px;font-weight:800;color:var(--navy);text-align:center}
+  .lb tr.me td{background:var(--blue-bg);font-weight:700}
+  .lb tr.top1 .rk{color:#b8860b} .lb tr.top2 .rk{color:#7d8791} .lb tr.top3 .rk{color:#a0522d}
+  .opt.right{border-color:var(--green);background:var(--green-bg);color:var(--green);font-weight:700}
+  .opt.wrong{border-color:var(--red);background:var(--red-bg);color:var(--red);font-weight:700}
+  .qimg{max-width:100%;max-height:260px;border-radius:10px;display:block;margin:0 auto 10px}
   .sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:12px}
   .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px}
   .tcard .nm{font-size:16px;font-weight:700}
@@ -138,6 +146,8 @@
 
   <!-- Exam mode (opened from an exam link) -->
   <div id="examView" class="hidden"><div class="exam card" id="examBox"></div></div>
+  <!-- Daily quiz (opened from the daily link) -->
+  <div id="dailyView" class="hidden"><div class="exam card" id="dailyBox"></div><div class="exam card hidden" id="dailyBoard"></div></div>
 
   <div id="app" class="hidden">
     <!-- LIST VIEW -->
@@ -146,6 +156,7 @@
         <div class="row" style="justify-content:space-between;margin-bottom:4px">
           <h2 style="margin:0">Training overview</h2>
           <div class="row">
+            <button class="btn" id="quizBtn">Daily quiz</button>
             <button class="btn" id="bankBtn">Exam bank</button>
             <button class="btn primary" id="addBtn">Add trainee</button>
           </div>
@@ -159,6 +170,27 @@
         <div id="cards"></div>
         <p class="note" style="margin-top:12px"><a href="#" id="doneToggle"></a></p>
         <div class="tcards hidden" id="doneCards"></div>
+      </div>
+    </div>
+
+    <!-- DAILY QUIZ ADMIN -->
+    <div id="quizView" class="hidden">
+      <div class="row" style="margin-bottom:10px"><button class="btn" id="quizBack">Back to overview</button></div>
+      <div class="card">
+        <h2>Daily quiz</h2>
+        <p class="note">Every day, all staff get the same 3 questions from the pool. Share the link once in the staff WhatsApp groups; it stays the same every day.</p>
+        <div class="linkbox" id="quizLink"></div>
+        <div class="row"><a class="btn primary" id="quizShare" target="_blank" style="text-decoration:none">Share on WhatsApp</a><button class="btn" id="quizCopy">Copy link</button></div>
+        <p class="note" id="quizStats" style="margin-top:10px"></p>
+      </div>
+      <div class="card"><h2>Leaderboard</h2><div id="quizLb"></div></div>
+      <div class="card"><h2>Today's questions</h2><div id="quizToday"></div></div>
+      <div class="card" id="quizPoolCard">
+        <h2>Question pool</h2>
+        <p class="note" id="quizPoolInfo"></p>
+        <div class="row"><input type="file" id="quizFile" accept=".json,application/json"></div>
+        <p class="note err hidden" id="quizErr"></p>
+        <div class="row" style="margin-top:10px"><button class="btn danger" id="quizSeason">Start a new season (reset scores)</button></div>
       </div>
     </div>
 
@@ -498,7 +530,7 @@ function calc(t){
 /* ============ UI HELPERS ============ */
 const $ = id => document.getElementById(id);
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function show(view){ ['listView','formView','detailView','bankView'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); window.scrollTo(0,0); }
+function show(view){ ['listView','formView','detailView','bankView','quizView'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); window.scrollTo(0,0); }
 function toast(msg){ const d=document.createElement('div'); d.className='toast'; d.textContent=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),2400); }
 function modal(html, sticky){
   const o=document.createElement('div'); o.className='overlay'; o.innerHTML=`<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
@@ -1096,6 +1128,195 @@ function showResult(score, total, passMark, again){
     <p class="note" style="text-align:center;margin-top:12px">${again?'This exam has already been completed. ':''}${pass?'Well done. Your result has been sent to your buddy and manager.':'Your result has been sent to your buddy. They will arrange a retake after more practice.'}</p>`;
 }
 
+/* ============ DAILY QUIZ ============ */
+const QUIZ_POOL = 'training_quiz_pool', QUIZ_CFG = 'training_quiz_cfg', PLAYER_PREFIX = 'training_p_';
+const PER_DAY = 3;
+let qPool = null, qCfg = null, players = [];
+async function loadQuiz(){
+  const [p, c] = await Promise.all([kvGet(QUIZ_POOL, true), kvGet(QUIZ_CFG, true)]);
+  qPool = p ? dec(p) : null;
+  qCfg = c ? JSON.parse(c) : { start: todayStr() };
+  players = []; (await kvPrefix(PLAYER_PREFIX)).forEach(v=>{ try{ players.push(JSON.parse(v)); }catch(e){} });
+}
+function seeded(seed){ return ()=>{ seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// Same 3 questions for everyone today; the pool is gone through in a fixed shuffled order before any repeat.
+function todaysQuestions(){
+  if (!qPool || qPool.questions.length < PER_DAY) return [];
+  const n = qPool.questions.length, rnd = seeded(qPool.seed || 7), order = [...Array(n).keys()];
+  for (let i=n-1;i>0;i--){ const j = Math.floor(rnd()*(i+1)); [order[i],order[j]] = [order[j],order[i]]; }
+  const d = Math.max(0, Math.floor((parseDate(todayStr()) - parseDate(qCfg.start)) / 86400000));
+  return Array.from({length:PER_DAY}, (_,k)=> order[(d*PER_DAY + k) % n]);
+}
+function playerScore(p){
+  let score=0, days=0;
+  Object.entries(p.days||{}).forEach(([date,arr])=>{ if (date >= qCfg.start){ days++; arr.forEach(a=>{ if (a.ok) score++; }); } });
+  return { score, days };
+}
+function leaderboard(){
+  const rows = players.map(p=>({p, ...playerScore(p)})).filter(r=>r.days>0);
+  rows.sort((a,b)=> b.score-a.score || a.days-b.days || a.p.name.localeCompare(b.p.name));
+  let rank = 0, prev = null;
+  rows.forEach((r,i)=>{ if (!prev || r.score!==prev.score || r.days!==prev.days) rank = i+1; r.rank = rank; prev = r; });
+  return rows;
+}
+function lbTable(rows, meId){
+  const top = rows.slice(0,10), me = rows.find(r=>r.p.id===meId);
+  const tr = r=>`<tr class="${r.p.id===meId?'me':''} ${r.rank<=3?'top'+r.rank:''}"><td class="rk">${r.rank}</td><td>${esc(r.p.name)}<div class="note" style="margin:0">${esc(outletName(r.p.outlet))}</div></td><td style="text-align:right"><b>${r.score}</b> pts</td></tr>`;
+  if (!rows.length) return '<p class="note">No answers yet this season. Be the first!</p>';
+  return `<table class="lb">${top.map(tr).join('')}${me && me.rank>10 ? '<tr><td colspan="3" class="note" style="text-align:center">...</td></tr>'+tr(me) : ''}</table>
+    <p class="note">1 point per correct answer. Season started ${fmtDate(qCfg.start)}.</p>`;
+}
+async function sha(text){ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''); }
+
+// ---- Staff side (?daily)
+let me = null;
+async function runDaily(){
+  $('gate').classList.add('hidden'); $('dailyView').classList.remove('hidden'); $('pageTitle').textContent = 'Daily quiz';
+  const box = $('dailyBox'); box.innerHTML = '<p class="note">Loading...</p>';
+  try{ await Promise.all([loadOutlets(), loadQuiz()]); }
+  catch(e){ box.innerHTML = '<h2>Could not load the quiz</h2><p class="note">Check your internet and refresh the page.</p>'; return; }
+  if (!todaysQuestions().length){ box.innerHTML = '<h2>No quiz today</h2><p class="note">Questions haven\'t been added yet. Check back soon.</p>'; return; }
+  let saved = null; try{ saved = localStorage.getItem('training_player'); }catch(e){}
+  me = saved && players.find(p=>p.id===saved);
+  me ? dailyPlay() : dailyJoin();
+}
+function dailyJoin(){
+  const box = $('dailyBox');
+  const outletOpts = outlets.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
+  box.innerHTML = `<h2>Join the daily quiz</h2>
+    <p class="note">3 quick questions every day. Get them right to climb the team leaderboard.</p>
+    <div class="tabs"><button class="on" data-j="new">I'm new here</button><button data-j="old">I've joined before</button></div>
+    <div id="jNew">
+      <label class="f" for="jName">Your full name</label><input id="jName" style="width:100%" autocomplete="name">
+      <label class="f" for="jOutlet">Your outlet</label><select id="jOutlet" style="width:100%">${outletOpts}</select>
+      <label class="f" for="jPin">Choose a 4-digit PIN (so only you can play as you)</label><input id="jPin" inputmode="numeric" maxlength="4" style="width:100%" type="password">
+    </div>
+    <div id="jOld" class="hidden">
+      <label class="f" for="jOutlet2">Your outlet</label><select id="jOutlet2" style="width:100%">${outletOpts}</select>
+      <label class="f" for="jWho">Your name</label><select id="jWho" style="width:100%"></select>
+      <label class="f" for="jPin2">Your PIN</label><input id="jPin2" inputmode="numeric" maxlength="4" style="width:100%" type="password">
+    </div>
+    <p class="note err hidden" id="jErr"></p>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="jGo">Continue</button></div>`;
+  let mode = 'new';
+  box.querySelectorAll('[data-j]').forEach(b=>b.onclick=()=>{ mode=b.dataset.j; box.querySelectorAll('[data-j]').forEach(x=>x.classList.toggle('on',x===b)); $('jNew').classList.toggle('hidden',mode!=='new'); $('jOld').classList.toggle('hidden',mode!=='old'); });
+  const fillWho = ()=>{ $('jWho').innerHTML = players.filter(p=>p.outlet===$('jOutlet2').value).sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('') || '<option value="">No one from this outlet yet</option>'; };
+  $('jOutlet2').onchange = fillWho; fillWho();
+  const err = m=>{ $('jErr').textContent=m; $('jErr').classList.remove('hidden'); };
+  $('jGo').onclick = async ()=>{
+    try{
+      if (mode==='new'){
+        const name = $('jName').value.trim().replace(/\s+/g,' '), pin = $('jPin').value.trim(), outlet = $('jOutlet').value;
+        if (name.split(' ').length < 2) return err('Enter your full name (first and last name).');
+        if (!/^\d{4}$/.test(pin)) return err('Your PIN must be 4 numbers.');
+        if (players.some(p=>norm(p.name)===norm(name) && p.outlet===outlet)) return err('This name is already registered at this outlet. Use "I\'ve joined before".');
+        const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+        me = { id, name, outlet, pin: await sha(id+pin), joined: todayStr(), days:{} };
+        await kvSet(PLAYER_PREFIX+id, JSON.stringify(me)); players.push(me);
+      } else {
+        const p = players.find(x=>x.id===$('jWho').value); if (!p) return err('Choose your name.');
+        if (p.pin !== await sha(p.id+$('jPin2').value.trim())) return err('Wrong PIN. Try again.');
+        me = p;
+      }
+      try{ localStorage.setItem('training_player', me.id); }catch(e){}
+      dailyPlay();
+    }catch(e){ err('Could not connect. Check your internet and try again.'); }
+  };
+}
+async function dailyPlay(){
+  const box = $('dailyBox'), qs = todaysQuestions(), today = todayStr();
+  const mine = (me.days||{})[today] || [];
+  if (mine.length >= qs.length) return dailyDone();
+  const k = mine.length, q = qPool.questions[qs[k]];
+  box.innerHTML = `<div class="row" style="justify-content:space-between"><span class="qnum">Question ${k+1} of ${qs.length} · today</span><a href="#" id="notMe" class="note">Not ${esc(me.name.split(' ')[0])}?</a></div>
+    <div class="bar"><i style="width:${Math.round(k/qs.length*100)}%"></i></div>
+    ${q.image?`<img class="qimg" src="${esc(q.image)}" alt="">`:''}
+    <div class="qtext">${esc(q.q)}</div>
+    ${q.options.map((o,i)=>`<button class="opt" data-i="${i}">${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
+    <div id="dFb"></div>`;
+  $('notMe').onclick = e=>{ e.preventDefault(); try{ localStorage.removeItem('training_player'); }catch(err){} me=null; dailyJoin(); };
+  box.querySelectorAll('.opt').forEach(b=>b.onclick = async ()=>{
+    box.querySelectorAll('.opt').forEach(x=>x.disabled=true);
+    const pick = +b.dataset.i, ok = pick === +q.answer;
+    try{
+      const fresh = JSON.parse(await kvGet(PLAYER_PREFIX+me.id, true));   // one answer per question, no changing it
+      fresh.days = fresh.days||{}; const arr = fresh.days[today] = fresh.days[today]||[];
+      if (arr.length === k){ arr.push({ q: qs[k], pick, ok }); await kvSet(PLAYER_PREFIX+me.id, JSON.stringify(fresh)); }
+      me = fresh; const i = players.findIndex(p=>p.id===me.id); if (i>=0) players[i]=me;
+    }catch(e){ box.querySelectorAll('.opt').forEach(x=>x.disabled=false); toast('Could not save. Check your internet.'); return; }
+    box.querySelectorAll('.opt').forEach(x=>{ const xi=+x.dataset.i; if (xi===+q.answer) x.classList.add('right'); else if (xi===pick) x.classList.add('wrong'); });
+    $('dFb').innerHTML = `<p style="font-weight:700;color:${ok?'var(--green)':'var(--red)'}">${ok?'Correct! +1 point':'Not quite. The right answer is '+String.fromCharCode(65+ +q.answer)+'.'}</p>
+      ${q.explain?`<p class="note">${esc(q.explain)}</p>`:''}
+      <button class="btn primary" id="dNext">${k+1<qs.length?'Next question':'See my score'}</button>`;
+    $('dNext').onclick = ()=>dailyPlay();
+  });
+}
+function dailyDone(){
+  const mine = me.days[todayStr()] || [], right = mine.filter(a=>a.ok).length;
+  const rows = leaderboard(), myRow = rows.find(r=>r.p.id===me.id);
+  $('dailyBox').innerHTML = `<div class="result ${right===mine.length?'pass':right?'':'fail'}" style="${right && right<mine.length?'background:var(--amber-bg);color:var(--amber)':''}">
+      <div class="big">${right}/${mine.length}</div>
+      <div class="word">${right===mine.length?'Perfect day!':right?'Good try!':'Better luck tomorrow!'}</div>
+      <p>${myRow?`You are #${myRow.rank} with ${myRow.score} points`:''}</p></div>
+    <p class="note" style="text-align:center">New questions tomorrow. Come back every day to keep climbing.</p>`;
+  $('dailyBoard').classList.remove('hidden');
+  $('dailyBoard').innerHTML = '<h2>Top 10</h2>' + lbTable(rows, me.id);
+}
+
+// ---- Admin side
+async function openQuizAdmin(){
+  show('quizView'); $('quizLb').innerHTML = '<p class="note">Loading...</p>';
+  try{ await loadQuiz(); }catch(e){ $('quizLb').innerHTML = '<p class="note err">Could not load. Check your internet.</p>'; return; }
+  const url = location.origin + location.pathname + '?daily';
+  $('quizLink').textContent = url;
+  $('quizShare').href = 'https://wa.me/?text=' + encodeURIComponent(`Daily quiz is live! 3 quick questions every day. Top 10 on the leaderboard get the bragging rights. Play here: ${url}`);
+  $('quizCopy').onclick = async ()=>{ try{ await navigator.clipboard.writeText(url); toast('Link copied'); }catch(e){ prompt('Copy this link:', url); } };
+  const rows = leaderboard(), today = todayStr();
+  const played = players.filter(p=>(p.days||{})[today] && p.days[today].length).length;
+  $('quizStats').textContent = `${players.length} staff joined · ${played} played today`;
+  $('quizLb').innerHTML = lbTable(rows, null);
+  const qs = todaysQuestions();
+  $('quizToday').innerHTML = qs.length ? qs.map((i,k)=>{ const q = qPool.questions[i];
+    const answered = players.map(p=>((p.days||{})[today]||[])[k]).filter(Boolean);
+    const right = answered.filter(a=>a.ok).length;
+    return `<div class="rev"><b>${k+1}. ${esc(q.q)}</b><div class="note" style="color:var(--green)">Answer: ${esc(q.options[q.answer])}</div>
+      <div class="note">${answered.length ? `${right} of ${answered.length} answered correctly (${Math.round(right/answered.length*100)}%)` : 'No answers yet'}</div></div>`; }).join('')
+    : '<p class="note">Upload a question pool (at least 3 questions) to start.</p>';
+  const isMaster = level==='master';
+  $('quizPoolInfo').textContent = qPool ? `${qPool.questions.length} questions in the pool (enough for ${Math.floor(qPool.questions.length/PER_DAY)} days before questions repeat).${isMaster?' Uploading a new file replaces the pool; scores are kept.':''}` : 'No question pool yet.';
+  $('quizFile').disabled = !isMaster; $('quizSeason').classList.toggle('hidden', !isMaster);
+}
+function validatePool(p){
+  const list = Array.isArray(p) ? p : p && p.questions;
+  if (!Array.isArray(list) || list.length < PER_DAY) return 'The pool needs at least 3 questions.';
+  for (let i=0;i<list.length;i++){
+    const q = list[i];
+    if (!q.q || !Array.isArray(q.options) || q.options.length!==4) return `Question ${i+1} needs text and exactly 4 options.`;
+    if (!(Number.isInteger(q.answer) && q.answer>=0 && q.answer<4)) return `Question ${i+1} needs "answer": 0, 1, 2 or 3 (the position of the right option).`;
+  }
+  return null;
+}
+$('quizFile').onchange = async e=>{
+  const f = e.target.files[0]; if (!f) return; $('quizErr').classList.add('hidden');
+  try{
+    const data = JSON.parse(await f.text()), problem = validatePool(data);
+    if (problem) throw new Error(problem);
+    const pool = { questions: Array.isArray(data) ? data : data.questions, seed: Math.floor(Math.random()*1e9), uploaded: new Date().toISOString() };
+    if (!confirm(`Replace the question pool with ${pool.questions.length} questions? Scores are kept.`)) { e.target.value=''; return; }
+    await kvSet(QUIZ_POOL, enc(pool));
+    if (!qCfg || !qCfg.saved){ qCfg = { start: todayStr(), saved: true }; await kvSet(QUIZ_CFG, JSON.stringify(qCfg)); }
+    toast('Question pool uploaded'); openQuizAdmin();
+  }catch(err){ $('quizErr').textContent = err instanceof SyntaxError ? 'This file could not be read. Upload the .json pool file.' : err.message; $('quizErr').classList.remove('hidden'); }
+  e.target.value='';
+};
+$('quizSeason').onclick = async ()=>{
+  if (!confirm('Start a new season? Everyone starts again from 0 points from today. Old answers stay saved.')) return;
+  qCfg = { ...(qCfg||{}), start: todayStr(), saved: true };
+  try{ await kvSet(QUIZ_CFG, JSON.stringify(qCfg)); toast('New season started'); openQuizAdmin(); }catch(e){ toast('Could not save. Check your internet.'); }
+};
+$('quizBtn').onclick = ()=>openQuizAdmin();
+$('quizBack').onclick = ()=>{ show('listView'); renderOverview(); };
+
 /* ============ LOGIN ============ */
 function enter(lv, outletId){
   level=lv; myOutlet=outletId||null;
@@ -1103,6 +1324,7 @@ function enter(lv, outletId){
   const opts = outlets.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
   $('iOutlet').innerHTML = opts;
   $('bankBtn').classList.toggle('hidden', lv==='outlet');
+  $('quizBtn').classList.toggle('hidden', lv==='outlet');
   show('listView'); renderOverview();
 }
 function tryLogin(){
@@ -1119,6 +1341,7 @@ $('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
 (async ()=>{
   const token = new URLSearchParams(location.search).get('exam');
   if (token){ $('banner').classList.add('hidden'); return runExam(token); }
+  if (new URLSearchParams(location.search).has('daily')){ $('banner').classList.add('hidden'); return runDaily(); }
   try{
     const a = await kvGet('access_passwords'); if (a) access = JSON.parse(a);
     if (access.whatsapp) $('banner').href = 'https://wa.me/'+access.whatsapp;
