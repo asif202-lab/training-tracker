@@ -163,6 +163,39 @@
   .recipe b{color:#2e7d4f;margin-right:4px}
   .teaser{display:block;width:100%;margin-top:12px;font:inherit;font-size:15px;font-weight:700;color:#8a6d00;background:#fff7dd;border:2px dashed #e6c35c;border-radius:14px;padding:12px;cursor:pointer}
   .teaser:hover{background:#fff1c4}
+  /* Dish player: phone first */
+  #dishView{margin:0 -12px}
+  #dishList{padding:0 12px}
+  .cat{margin-bottom:18px}
+  .cat-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0 8px}
+  .cat-h h2{margin:0;font-size:20px}
+  .sharebtn{font:inherit;font-size:13px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:16px;padding:6px 12px;cursor:pointer}
+  .dp-head{display:flex;align-items:center;gap:8px;padding:0 12px 8px}
+  .dp-back{font:inherit;font-size:22px;line-height:1;border:none;background:#fff;border:1px solid var(--line);border-radius:50%;width:40px;height:40px;cursor:pointer;flex:0 0 40px;color:var(--ink)}
+  .dp-title{flex:1;min-width:0}
+  .dp-title b{display:block;font-size:19px;line-height:1.2}
+  .dp-title span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dp-share{font:inherit;font-size:13px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:16px;padding:7px 12px;cursor:pointer}
+  .dp-media{background:#fff;border-radius:18px;overflow:hidden;margin:0 12px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+  #dishPlayer .slide{border-radius:0;aspect-ratio:auto;height:min(46vh,420px);background:#1d232b}
+  .slide-bg{position:absolute;inset:0;background-size:cover;background-position:center;filter:blur(18px) brightness(.55);transform:scale(1.15)}
+  #dishPlayer .slide img{position:relative;height:100%;width:100%;object-fit:contain}
+  #dishPlayer .slide .cnt{z-index:2}
+  #dishPlayer .dots{position:absolute;left:0;right:0;bottom:8px;margin:0;z-index:2}
+  #dishPlayer .dots i{background:rgba(255,255,255,.45);box-shadow:0 0 2px rgba(0,0,0,.4)} #dishPlayer .dots i.done{background:rgba(255,255,255,.75)} #dishPlayer .dots i.on{background:#fff}
+  #dishPlayer .stepcard{border-radius:0;box-shadow:none;padding:12px 14px 14px}
+  #dishPlayer .sc-badge{margin-bottom:8px;font-size:11px}
+  #dishPlayer .sc-pill{font-size:18px;padding:6px 14px 6px 8px} #dishPlayer .sc-pill .em{font-size:24px}
+  #dishPlayer .sc-text{font-size:15px} #dishPlayer .sc-big{font-size:19px;margin:2px 0 4px}
+  .sc-tease{margin-top:10px;font-size:13px;font-weight:700;background:rgba(255,255,255,.16);border-radius:10px;padding:7px 10px}
+  #dishPlayer .recipe span{font-size:13px;padding:6px 8px}
+  #dishPlayer .sofar{margin:10px 12px 0;padding:8px 10px}
+  #dishPlayer .sofar .chip{font-size:13px;padding:3px 9px}
+  .dp-ctrl{position:sticky;bottom:0;display:grid;grid-template-columns:56px 1fr 1.3fr;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--bg) 75%,rgba(245,247,249,0));margin-top:6px;z-index:5}
+  .dp-ctrl button{font:inherit;font-weight:800;font-size:16px;border-radius:14px;padding:13px 8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .dp-ctrl .play{color:var(--navy)} .dp-ctrl .next{background:var(--navy);border-color:var(--navy);color:#fff}
+  .dp-ctrl button:disabled{opacity:.35;cursor:default}
+  @media (min-width:700px){ #dishView{margin:0} .dp-head,#dishList{padding-left:0;padding-right:0} .dp-media,#dishPlayer .sofar{margin-left:0;margin-right:0} .dp-ctrl{padding-left:0;padding-right:0} }
   .sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:12px}
   .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px}
   .tcard .nm{font-size:16px;font-weight:700}
@@ -192,23 +225,26 @@
 
   <!-- Exam mode (opened from an exam link) -->
   <div id="examView" class="hidden"><div class="exam card" id="examBox"></div></div>
-  <!-- Dish training slides (public ?dishes link, or from the app) -->
+  <!-- Dish training slides (public ?dishes / ?dishes=drinks / ?dish=id links, or from the app) -->
   <div id="dishView" class="hidden">
     <div class="row" style="margin-bottom:10px" id="dishTopBar"><button class="btn" id="dishHome">Back</button></div>
-    <div class="card" id="dishList"></div>
-    <div class="card hidden" id="dishPlayer">
-      <h2 id="dpTitle" style="margin-bottom:2px"></h2><p class="note" id="dpSub" style="margin-top:0"></p>
-      <div class="slide" id="dpSlide"><span class="cnt" id="dpCnt"></span><img id="dpImg" alt=""></div>
-      <div class="dots" id="dpDots"></div>
-      <div class="stepcard" id="dpCard"></div>
-      <div class="sofar" id="dpSoFar"><div class="sofar-h" id="dpSoFarH"></div><div class="chips" id="dpChips"></div></div>
-      <button class="teaser" id="dpTeaser"></button>
-      <div class="row" style="justify-content:space-between;margin-top:8px">
-        <button class="btn" id="dpPrev">◀ Back</button>
-        <button class="btn primary" id="dpPlay">▶ Play</button>
-        <button class="btn" id="dpNext">Next ▶</button>
+    <div id="dishList"></div>
+    <div id="dishPlayer" class="hidden">
+      <div class="dp-head">
+        <button class="dp-back" id="dpBack" aria-label="Back">←</button>
+        <div class="dp-title"><b id="dpTitle"></b><span id="dpSub"></span></div>
+        <button class="dp-share" id="dpShare" aria-label="Share this dish">Share</button>
       </div>
-      <p class="note" style="text-align:center">Swipe on the photo to move between steps.</p>
+      <div class="dp-media">
+        <div class="slide" id="dpSlide"><div class="slide-bg" id="dpBg"></div><img id="dpImg" alt=""><span class="cnt" id="dpCnt"></span><div class="dots" id="dpDots"></div></div>
+        <div class="stepcard" id="dpCard"></div>
+      </div>
+      <div class="sofar" id="dpSoFar"><div class="sofar-h" id="dpSoFarH"></div><div class="chips" id="dpChips"></div></div>
+      <div class="dp-ctrl">
+        <button id="dpPrev" aria-label="Previous step">◀</button>
+        <button id="dpPlay" class="play">▶ Play</button>
+        <button id="dpNext" class="next">Next ▶</button>
+      </div>
     </div>
   </div>
   <!-- Daily quiz (opened from the daily link) -->
@@ -265,9 +301,10 @@
       <div class="row" style="margin-bottom:10px"><button class="btn" id="bankBack">Back to overview</button></div>
       <div class="card">
         <h2>Dish bank</h2>
-        <p class="note">Upload a dish file (.json with step photos). Each dish becomes training slides, a dish exam, and daily quiz questions automatically.</p>
+        <p class="note">Upload a dish or category file (.json with step photos, e.g. drinks.json). Each dish becomes training slides, a dish exam, and daily quiz questions automatically.</p>
         <div class="row" style="margin-bottom:10px"><input type="file" id="dishFile" accept=".json,application/json"></div>
         <p class="note hidden" id="dishProg"></p>
+        <p class="note" id="dishLinks"></p>
         <p class="note err hidden" id="dishErr"></p>
         <div class="tablewrap"><table>
           <thead><tr><th>Dish</th><th>Brand</th><th>Steps</th><th>Exam marks</th><th>Pass mark</th><th>Status</th><th></th></tr></thead>
@@ -1333,29 +1370,47 @@ function dishReview(d, a){
 }
 
 // ---- Training slides
-let dView = { d:null, i:0, timer:null, fromApp:false };
-async function openDishes(fromApp){
-  dView.fromApp = fromApp;
+const CAT_SLUG = { drink:'drinks', curry:'curries', salad:'salads' };
+const catSlug = c => { const k = norm(c||'other'); return CAT_SLUG[k] || k.replace(/\s+/g,'-')+'s'; };
+const catTitle = slug => ({drinks:'Drinks', curries:'Curries', salads:'Salads'})[slug] || (slug.charAt(0).toUpperCase()+slug.slice(1));
+const baseUrl = () => location.origin + location.pathname;
+async function shareLink(url, title){
+  try{ if (navigator.share){ await navigator.share({ title, text: title, url }); return; } }catch(e){ if (e && e.name==='AbortError') return; }
+  try{ await navigator.clipboard.writeText(url); toast('Link copied. Paste it in WhatsApp.'); }catch(e){ prompt('Copy this link:', url); }
+}
+let dView = { d:null, i:0, timer:null, fromApp:false, cat:null };
+async function openDishes(fromApp, cat){
+  dView.fromApp = fromApp; dView.cat = cat || null;
   if (fromApp) $('app').classList.add('hidden');
-  $('dishView').classList.remove('hidden'); $('pageTitle').textContent = 'Dish training';
+  $('dishView').classList.remove('hidden'); $('pageTitle').classList.remove('hidden'); $('pageTitle').textContent = cat ? catTitle(cat) : 'Dish training';
   $('dishTopBar').classList.toggle('hidden', !fromApp);
   $('dishPlayer').classList.add('hidden'); $('dishList').classList.remove('hidden');
   $('dishList').innerHTML = '<p class="note">Loading dishes...</p>';
   if (!fromApp){ try{ await loadDishes(); }catch(e){ $('dishList').innerHTML='<p class="note err">Could not load. Check your internet and refresh.</p>'; return; } }
-  const list = dishes.filter(d=>d.active!==false);
-  const brands = [...new Set(list.map(d=>d.brand||'Other'))];
-  $('dishList').innerHTML = list.length ? `<h2>Dishes</h2><p class="note">Tap a dish to see how it is built, step by step.</p>` + brands.map(b=>`<h3>${esc(BRAND_NAMES[b]||b)}</h3><div class="dgrid">${list.filter(d=>(d.brand||'Other')===b).map(d=>`<button class="dcard" data-d="${esc(d.id)}"><div class="ph"><img data-k="${esc(imgKey(d.id,d.stepCount))}" alt=""></div><b>${esc(d.name)}</b><span>${esc(d.category||'')} · ${d.stepCount} steps</span></button>`).join('')}</div>`).join('')
-    : '<p class="note">No dishes uploaded yet.</p>';
+  const list = dishes.filter(d=>d.active!==false && (!cat || catSlug(d.category)===cat));
+  const cats = [...new Set(list.map(d=>catSlug(d.category)))];
+  $('dishList').innerHTML = list.length ? `<p class="note" style="margin-top:0">Tap a dish to learn how it is built, step by step.</p>` +
+    cats.map(c=>`<div class="cat"><div class="cat-h"><h2>${esc(catTitle(c))}</h2><button class="sharebtn" data-share-cat="${esc(c)}">Share ${esc(catTitle(c).toLowerCase())} link</button></div>
+      <div class="dgrid">${list.filter(d=>catSlug(d.category)===c).map(d=>`<button class="dcard" data-d="${esc(d.id)}"><div class="ph"><img data-k="${esc(imgKey(d.id,d.stepCount))}" alt=""></div><b>${esc(d.name)}</b><span>${esc(BRAND_NAMES[d.brand]||d.brand||'')} · ${d.stepCount} steps</span></button>`).join('')}</div></div>`).join('')
+    : `<p class="note">No dishes here yet.</p>`;
   $('dishList').querySelectorAll('img[data-k]').forEach(im=>getImg(im.dataset.k).then(src=>{ if (src) im.src = src; }));
   $('dishList').querySelectorAll('.dcard').forEach(b=>b.onclick=()=>openSlides(dishes.find(d=>d.id===b.dataset.d)));
+  $('dishList').querySelectorAll('[data-share-cat]').forEach(b=>b.onclick=()=>shareLink(baseUrl()+'?dishes='+b.dataset.shareCat, catTitle(b.dataset.shareCat)+' training'));
 }
 function openSlides(d){
+  if (!d) return;
   dView.d = d; dView.i = 0; stopSlides();
   $('dishList').classList.add('hidden'); $('dishPlayer').classList.remove('hidden');
-  $('dishTopBar').classList.remove('hidden');
-  $('dpTitle').textContent = d.name; $('dpSub').textContent = `${BRAND_NAMES[d.brand]||d.brand||''} · ${d.category||''} · served in ${d.vessel.name}`;
+  $('dishTopBar').classList.add('hidden'); $('pageTitle').classList.add('hidden');
+  $('dpTitle').textContent = d.name; $('dpSub').textContent = `${catTitle(catSlug(d.category)).replace(/s$/,'')} · ${BRAND_NAMES[d.brand]||d.brand||''} · ${d.vessel.name}`;
   for (let n=1;n<=d.stepCount;n++) getImg(imgKey(d.id,n));   // preload
   renderSlide(); window.scrollTo(0,0);
+}
+function closeSlides(){
+  stopSlides();
+  $('dishPlayer').classList.add('hidden'); $('pageTitle').classList.remove('hidden');
+  if (dView.single){ dView.single = false; return openDishes(dView.fromApp, catSlug(dView.d.category)); }
+  $('dishList').classList.remove('hidden'); $('dishTopBar').classList.toggle('hidden', !dView.fromApp); window.scrollTo(0,0);
 }
 // Picks a fun icon for an ingredient name.
 function emojiFor(n){
@@ -1370,40 +1425,34 @@ async function renderSlide(){
   const d = dView.d, i = dView.i, st = d.steps[i], n = d.stepCount, last = i===n-1;
   const role = nm => (d.ingredients.find(x=>x.name===nm)||{}).role;
   const roleTag = nm => role(nm)==='garnish' ? '<small class="garnish">Garnish</small>' : role(nm)==='sauce' ? '<small class="sauce">Sauce</small>' : '';
-  $('dpCnt').textContent = `Step ${i+1} of ${n}`;
+  const recipe = () => `<div class="recipe">${d.steps.flatMap(s=>s.adds).map((x,k)=>`<span><b>${k+1}</b>${emojiFor(x)} ${esc(x)}</span>`).join('')}</div>`;
+  const nextHas = !last && d.steps.slice(i+1).some(s=>s.adds.length);
+  const tease = last ? '' : `<div class="sc-tease">${nextHas?'🤔 Guess what goes in next, then tap Next':'👀 Tap Next to see the final dish'}</div>`;
+  $('dpCnt').textContent = `${i+1} / ${n}`;
   $('dpDots').innerHTML = Array.from({length:n},(_,k)=>`<i class="${k<i?'done':k===i?'on':''}"></i>`).join('');
   const card = $('dpCard');
   if (i===0){
     card.className = 'stepcard start';
-    card.innerHTML = `<div class="sc-badge">LET'S BUILD IT</div><div class="sc-big">${esc(d.vessel.name)}</div><div class="sc-text">${esc(st.text)}<br>${d.ingredients.length} items go into this ${d.category==='Drink'?'glass':'dish'}. Can you name them all?</div>`;
+    card.innerHTML = `<div class="sc-badge">LET'S BUILD IT</div><div class="sc-big">${esc(d.vessel.name)}</div><div class="sc-text">${d.ingredients.length} items go into this ${d.category==='Drink'?'glass':'dish'}. Can you name them all?</div>${tease}`;
   } else if (last && !st.adds.length){
     card.className = 'stepcard final';
-    card.innerHTML = `<div class="sc-badge">🎉 READY TO SERVE</div><div class="sc-big">${esc(d.name)}</div><div class="sc-text">${esc(st.text)}</div>
-      <div class="recipe">${d.steps.flatMap(s=>s.adds).map((x,k)=>`<span><b>${k+1}</b>${emojiFor(x)} ${esc(x)}</span>`).join('')}</div>`;
+    card.innerHTML = `<div class="sc-badge">🎉 READY TO SERVE</div><div class="sc-big">${esc(d.name)}</div>${recipe()}`;
   } else {
-    card.className = 'stepcard';
+    card.className = 'stepcard' + (last?' final':'');
     card.innerHTML = `<div class="sc-badge">${last?'🎉 LAST STEP · READY TO SERVE':'STEP '+(i+1)+(st.adds.length?' · ADD':'')}</div>` +
       (st.adds.length ? `<div class="sc-new">${st.adds.map(x=>`<span class="sc-pill"><span class="em">${emojiFor(x)}</span>${esc(x)}${roleTag(x)}</span>`).join('')}</div>` : `<div class="sc-big">👨‍🍳 Technique step</div>`) +
-      `<div class="sc-text">${esc(st.text)}</div>` +
-      (last ? `<div class="recipe">${d.steps.flatMap(s=>s.adds).map((x,k)=>`<span><b>${k+1}</b>${emojiFor(x)} ${esc(x)}</span>`).join('')}</div>` : '');
-    if (last) card.classList.add('final');
+      `<div class="sc-text">${esc(st.text)}</div>` + (last ? recipe() : tease);
   }
   void card.offsetWidth; card.classList.add('pop');
   const added = d.steps.slice(0, i+1).flatMap(s=>s.adds), fresh = new Set(st.adds);
   $('dpSoFar').classList.toggle('hidden', !added.length || last);
   $('dpSoFarH').textContent = `In the ${d.category==='Drink'?'glass':'bowl'} so far · ${added.length} of ${d.ingredients.length}`;
   $('dpChips').innerHTML = added.map(x=>`<span class="chip ${fresh.has(x)?'new':''}">${emojiFor(x)} ${esc(x)}</span>`).join('');
-  // Curiosity teaser: make them guess before revealing the next item.
-  const nextAdds = !last ? d.steps.slice(i+1).find(s=>s.adds.length) : null;
-  const tz = $('dpTeaser');
-  tz.classList.toggle('hidden', last);
-  tz.textContent = nextAdds ? '🤔 Can you guess what goes in next? Tap to reveal' : '👀 Almost done... tap to see the final dish';
   $('dpPrev').disabled = i===0; $('dpNext').disabled = last;
   const img = $('dpImg'); img.classList.remove('kb'); img.style.opacity = .25;
   const src = await getImg(imgKey(d.id, i+1));
-  if (dView.d===d && dView.i===i){ img.src = src||''; img.style.opacity = 1; void img.offsetWidth; img.classList.add('kb'); }
+  if (dView.d===d && dView.i===i){ img.src = src||''; $('dpBg').style.backgroundImage = src ? `url("${src}")` : ''; img.style.opacity = 1; void img.offsetWidth; img.classList.add('kb'); }
 }
-$('dpTeaser').onclick = ()=>{ stopSlides(); moveSlide(1); };
 function stopSlides(){ clearInterval(dView.timer); dView.timer=null; $('dpPlay').textContent='▶ Play'; }
 function moveSlide(k){ const n = dView.d.stepCount; dView.i = Math.max(0, Math.min(n-1, dView.i+k)); renderSlide(); }
 $('dpPrev').onclick = ()=>{ stopSlides(); moveSlide(-1); };
@@ -1414,13 +1463,14 @@ $('dpPlay').onclick = ()=>{
   $('dpPlay').textContent='❚❚ Pause';
   dView.timer = setInterval(()=>{ if (dView.i>=dView.d.stepCount-1) return stopSlides(); moveSlide(1); }, 3000);
 };
+$('dpBack').onclick = closeSlides;
+$('dpShare').onclick = ()=>shareLink(baseUrl()+'?dish='+encodeURIComponent(dView.d.id), dView.d.name+' training');
 let dsx = null;
 $('dpSlide').addEventListener('touchstart', e=>{ dsx=e.touches[0].clientX; }, {passive:true});
 $('dpSlide').addEventListener('touchend', e=>{ if(dsx===null) return; const dx=e.changedTouches[0].clientX-dsx; if(Math.abs(dx)>40){ stopSlides(); moveSlide(dx<0?1:-1); } dsx=null; });
 $('dishHome').onclick = ()=>{
   stopSlides();
-  if (!$('dishPlayer').classList.contains('hidden')){ $('dishPlayer').classList.add('hidden'); $('dishList').classList.remove('hidden'); $('dishTopBar').classList.toggle('hidden', !dView.fromApp); return; }
-  $('dishView').classList.add('hidden'); $('app').classList.remove('hidden'); $('pageTitle').textContent='Training tracker'; show('listView'); renderOverview();
+  $('dishView').classList.add('hidden'); $('app').classList.remove('hidden'); $('pageTitle').classList.remove('hidden'); $('pageTitle').textContent='Training tracker'; show('listView'); renderOverview();
 };
 $('dishBtn').onclick = ()=>openDishes(true);
 
@@ -1438,15 +1488,19 @@ $('dishFile').onchange = async e=>{
   $('dishErr').classList.add('hidden');
   const prog = m=>{ $('dishProg').textContent=m; $('dishProg').classList.toggle('hidden', !m); };
   try{
-    const d = JSON.parse(await f.text()), problem = validateDish(d);
-    if (problem) throw new Error(problem);
-    const old = dishes.find(x=>x.id===d.id);
-    if (old && !confirm(`Replace "${old.name}" with this new version? Past exam results stay on record.`)){ e.target.value=''; return; }
-    for (let n=0;n<d.steps.length;n++){ prog(`Uploading photo ${n+1} of ${d.steps.length}...`); await kvSet(DIMG_PREFIX+imgKey(d.id,n+1), d.steps[n].img); delete imgCache[imgKey(d.id,n+1)]; }
-    const meta = { ...d, stepCount:d.steps.length, steps:d.steps.map(s=>({text:s.text, adds:s.adds||[]})), active: old ? old.active : true,
-      passMark: old ? old.passMark : (d.passMark||85), retakeGap: old ? old.retakeGap : 1, uploaded:new Date().toISOString() };
-    await kvSet(DISH_PREFIX+d.id, enc(meta));
-    await loadDishes(); prog(''); toast('Dish uploaded: '+d.name); renderDishBank();
+    const data = JSON.parse(await f.text());
+    const list = Array.isArray(data) ? data : Array.isArray(data.dishes) ? data.dishes : [data];
+    for (const d of list){ const problem = validateDish(d); if (problem) throw new Error((d && d.name ? d.name+': ' : '')+problem); }
+    const olds = list.filter(d=>dishes.some(x=>x.id===d.id));
+    if (olds.length && !confirm(`Replace ${olds.map(d=>d.name).join(', ')} with the new version? Past exam results stay on record.`)){ e.target.value=''; return; }
+    for (const d of list){
+      const old = dishes.find(x=>x.id===d.id);
+      for (let n=0;n<d.steps.length;n++){ prog(`${d.name}: uploading photo ${n+1} of ${d.steps.length}...`); await kvSet(DIMG_PREFIX+imgKey(d.id,n+1), d.steps[n].img); delete imgCache[imgKey(d.id,n+1)]; }
+      const meta = { ...d, stepCount:d.steps.length, steps:d.steps.map(s=>({text:s.text, adds:s.adds||[]})), active: old ? old.active : true,
+        passMark: old ? old.passMark : (d.passMark||85), retakeGap: old ? old.retakeGap : 1, uploaded:new Date().toISOString() };
+      await kvSet(DISH_PREFIX+d.id, enc(meta));
+    }
+    await loadDishes(); prog(''); toast(list.length>1 ? `${list.length} dishes uploaded` : 'Dish uploaded: '+list[0].name); renderDishBank();
   }catch(err){ prog(''); $('dishErr').textContent = err instanceof SyntaxError ? 'This file could not be read. Upload the dish .json file.' : err.message; $('dishErr').classList.remove('hidden'); }
   e.target.value='';
 };
@@ -1471,6 +1525,8 @@ function renderDishBank(){
     try{ await saveMeta(d); toast(d.active?'Dish is now visible':'Dish hidden'); renderDishBank(); }catch(e){ toast('Could not save. Check your internet.'); }
   });
   $('dishTable').querySelectorAll('[data-dview]').forEach(b=>b.onclick=()=>{ openDishes(true).then(()=>openSlides(dishes.find(d=>d.id===b.dataset.dview))); });
+  $('dishLinks').innerHTML = dishes.length ? 'Share links: ' + [...new Set(dishes.map(d=>catSlug(d.category)))].map(c=>`<a href="#" data-cl="${esc(c)}">${esc(catTitle(c))}</a>`).join(' · ') + ' · <a href="#" data-cl="">All dishes</a>' : '';
+  $('dishLinks').querySelectorAll('[data-cl]').forEach(a=>a.onclick=e=>{ e.preventDefault(); shareLink(baseUrl()+'?dishes'+(a.dataset.cl?'='+a.dataset.cl:''), (a.dataset.cl?catTitle(a.dataset.cl):'Dish')+' training'); });
 }
 
 // ---- Daily quiz questions made automatically from dishes
@@ -1719,7 +1775,15 @@ $('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
 (async ()=>{
   const token = new URLSearchParams(location.search).get('exam');
   if (token){ $('banner').classList.add('hidden'); return runExam(token); }
-  if (new URLSearchParams(location.search).has('dishes')){ $('banner').classList.add('hidden'); $('gate').classList.add('hidden'); return openDishes(false); }
+  const qp = new URLSearchParams(location.search);
+  if (qp.has('dishes')){ $('banner').classList.add('hidden'); $('gate').classList.add('hidden'); return openDishes(false, qp.get('dishes') || null); }
+  if (qp.has('dish')){
+    $('banner').classList.add('hidden'); $('gate').classList.add('hidden');
+    await openDishes(false, null);
+    const d = dishes.find(x=>x.id===qp.get('dish'));
+    if (d){ dView.single = true; openSlides(d); } else toast('That dish was not found. Showing all dishes.');
+    return;
+  }
   if (new URLSearchParams(location.search).has('daily')){ $('banner').classList.add('hidden'); return runDaily(); }
   try{
     const a = await kvGet('access_passwords'); if (a) access = JSON.parse(a);
