@@ -117,6 +117,25 @@
   .opt.right{border-color:var(--green);background:var(--green-bg);color:var(--green);font-weight:700}
   .opt.wrong{border-color:var(--red);background:var(--red-bg);color:var(--red);font-weight:700}
   .qimg{max-width:100%;max-height:260px;border-radius:10px;display:block;margin:0 auto 10px}
+  .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .dcard{font:inherit;color:var(--ink);text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:0;overflow:hidden;cursor:pointer}
+  .dcard .ph{aspect-ratio:1;background:#eef0f3;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .dcard .ph img{width:100%;height:100%;object-fit:cover}
+  .dcard b{display:block;padding:8px 10px 0;font-size:15px}
+  .dcard span{display:block;padding:0 10px 10px;font-size:12px;color:var(--muted)}
+  .slide{position:relative;background:#1d232b;border-radius:14px;overflow:hidden;aspect-ratio:1;display:flex;align-items:center;justify-content:center;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+  .slide img{max-width:100%;max-height:100%;object-fit:contain;transition:opacity .35s}
+  .slide .cnt{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-weight:700;padding:4px 10px;border-radius:12px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  .chip{font-size:13px;font-weight:600;padding:4px 10px;border-radius:14px;background:#eef0f3;color:#3c4550}
+  .chip.new{background:var(--navy);color:#fff}
+  .chip.garnish{border:1px solid #2e7d4f} .chip.sauce{border:1px solid #9a4a16}
+  .chip.ok{background:var(--green-bg);color:var(--green)} .chip.no{background:var(--red-bg);color:var(--red);text-decoration:line-through} .chip.miss{background:#fff;border:1px dashed var(--red);color:var(--red)}
+  .plate{position:relative;border-radius:14px;overflow:hidden;background:#1d232b;aspect-ratio:1;display:flex;align-items:center;justify-content:center;margin:8px 0}
+  .plate img{max-width:100%;max-height:100%;object-fit:contain}
+  .plate .tags{position:absolute;inset:auto 8px 8px 8px;display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
+  .plate .tags span{background:rgba(255,255,255,.92);color:#1d232b;font-size:13px;font-weight:700;padding:4px 10px;border-radius:14px;animation:drop .4s ease-out}
+  @keyframes drop{from{transform:translateY(-14px);opacity:0}to{transform:none;opacity:1}}
   .sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:12px}
   .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px}
   .tcard .nm{font-size:16px;font-weight:700}
@@ -146,6 +165,23 @@
 
   <!-- Exam mode (opened from an exam link) -->
   <div id="examView" class="hidden"><div class="exam card" id="examBox"></div></div>
+  <!-- Dish training slides (public ?dishes link, or from the app) -->
+  <div id="dishView" class="hidden">
+    <div class="row" style="margin-bottom:10px" id="dishTopBar"><button class="btn" id="dishHome">Back</button></div>
+    <div class="card" id="dishList"></div>
+    <div class="card hidden" id="dishPlayer">
+      <h2 id="dpTitle" style="margin-bottom:2px"></h2><p class="note" id="dpSub" style="margin-top:0"></p>
+      <div class="slide" id="dpSlide"><span class="cnt" id="dpCnt"></span><img id="dpImg" alt=""></div>
+      <p style="font-size:18px;font-weight:700;margin:12px 0 4px" id="dpText"></p>
+      <div class="chips" id="dpChips"></div>
+      <div class="row" style="justify-content:space-between;margin-top:8px">
+        <button class="btn" id="dpPrev">◀ Back</button>
+        <button class="btn primary" id="dpPlay">▶ Play</button>
+        <button class="btn" id="dpNext">Next ▶</button>
+      </div>
+      <p class="note" style="text-align:center">Swipe on the photo to move between steps.</p>
+    </div>
+  </div>
   <!-- Daily quiz (opened from the daily link) -->
   <div id="dailyView" class="hidden"><div class="exam card" id="dailyBox"></div><div class="exam card hidden" id="dailyBoard"></div></div>
 
@@ -156,6 +192,7 @@
         <div class="row" style="justify-content:space-between;margin-bottom:4px">
           <h2 style="margin:0">Training overview</h2>
           <div class="row">
+            <button class="btn" id="dishBtn">Dish training</button>
             <button class="btn" id="quizBtn">Daily quiz</button>
             <button class="btn" id="bankBtn">Exam bank</button>
             <button class="btn primary" id="addBtn">Add trainee</button>
@@ -197,6 +234,17 @@
     <!-- EXAM BANK -->
     <div id="bankView" class="hidden">
       <div class="row" style="margin-bottom:10px"><button class="btn" id="bankBack">Back to overview</button></div>
+      <div class="card">
+        <h2>Dish bank</h2>
+        <p class="note">Upload a dish file (.json with step photos). Each dish becomes training slides, a dish exam, and daily quiz questions automatically.</p>
+        <div class="row" style="margin-bottom:10px"><input type="file" id="dishFile" accept=".json,application/json"></div>
+        <p class="note hidden" id="dishProg"></p>
+        <p class="note err hidden" id="dishErr"></p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Dish</th><th>Brand</th><th>Steps</th><th>Exam marks</th><th>Pass mark</th><th>Status</th><th></th></tr></thead>
+          <tbody id="dishTable"></tbody>
+        </table></div>
+      </div>
       <div class="card">
         <h2>Exam bank</h2>
         <p class="note">Upload an exam file (.json) to make it available online. Uploading a file with the same exam ID replaces that exam. Edit the pass mark, time limit (0 = no limit) or retake gap (days to wait after a fail) by changing the number. Pass mark changes apply to all results of that exam.</p>
@@ -430,6 +478,7 @@ function scoreQuestion(q, ans){
   if (ans === undefined || ans === null || ans === '') return 0;
   if (q.type==='mcq' || q.type==='truefalse') return String(ans)===String(q.answer) ? pts : 0;
   if (q.type==='text') return variants(q.answers).some(v=>matches(ans, v)) ? pts : 0;
+  if (q.type==='dish') return dishScore(q.dish, ans).score;
   if (q.type==='list'){
     const boxes = (Array.isArray(ans) ? ans : String(ans).split(/\n|,/)).map(b=>b.trim()).filter(Boolean);
     // Each answer box can count for one item only, and each item only once.
@@ -445,6 +494,7 @@ function scoreQuestion(q, ans){
 }
 const totalPoints = ex => ex.questions.reduce((s,q)=>s+(+q.points||1),0);
 function answerText(q, a){
+  if (q.type==='dish'){ if (!a || typeof a!=='object') return '(no answer)'; return 'Bowl/glass: '+(a.vessel||'-')+'\nItems: '+((a.items||[]).join(', ')||'-'); }
   if (a===undefined || a===null || a==='') return '(no answer)';
   if (q.type==='mcq') return q.options[a] ?? String(a);
   if (q.type==='truefalse') return a==='true'?'True':'False';
@@ -452,6 +502,7 @@ function answerText(q, a){
   return String(a);
 }
 function correctText(q){
+  if (q.type==='dish') return q.dish.vessel.name+' + '+q.dish.ingredients.map(i=>i.name).join(', ');
   if (q.type==='mcq') return q.options[q.answer];
   if (q.type==='truefalse') return String(q.answer)==='true'?'True':'False';
   if (q.type==='text') return variants(q.answers).join(' / ');
@@ -484,7 +535,7 @@ function dayOf(t){ return Math.floor((parseDate(todayStr()) - parseDate(t.start)
 const pctOf = e => e.score / e.total;
 // Pass mark comes from the exam bank (master can change it); 85% if the exam isn't in the bank.
 function passMarkFor(name, examId){
-  const ex = exams.find(x=>(examId && x.id===examId) || x.title===name);
+  const ex = examById(examId) || exams.find(x=>x.title===name) || dishes.map(dishExam).find(x=>x.title===name);
   return ((ex && +ex.passMark) || 85) / 100;
 }
 const isPass = e => pctOf(e) >= passMarkFor(e.name, e.examId) - 1e-9;
@@ -680,7 +731,7 @@ $('logout').onclick = e=>{
 };
 const renderList = renderOverview;
 $('doneToggle').onclick = e=>{ e.preventDefault(); showDone=!showDone; renderOverview(); };
-$('bankBtn').onclick = ()=>{ show('bankView'); renderBank(); };
+$('bankBtn').onclick = ()=>{ show('bankView'); renderBank(); renderDishBank(); };
 $('bankBack').onclick = ()=>{ show('listView'); renderOverview(); };
 
 /* ============ EXAM BANK ============ */
@@ -792,7 +843,7 @@ function renderDetail(){
   $('signer').textContent = signerFor(t) + (t.coverBuddy ? ' (covering for '+(t.buddy||'-')+')' : '');
 
   // Exams
-  const active = exams.filter(e=>e.active!==false);
+  const active = [...exams.filter(e=>e.active!==false), ...dishes.filter(d=>d.active!==false).map(dishExam)];
   $('onlineExam').innerHTML = active.map(e=>{
     const g = examGroups(t).find(x=>x.name===e.title);
     return `<option value="${esc(e.id)}">${esc(e.title)}${g?(g.passed?' (passed)':' (retake)'):''}</option>`;
@@ -895,7 +946,7 @@ $('eAdd').onclick = async ()=>{
 
 // Create a one-time exam link for this trainee
 $('makeLink').onclick = async ()=>{
-  const ex = exams.find(e=>e.id===$('onlineExam').value); if (!ex) return;
+  const ex = examById($('onlineExam').value); if (!ex) return;
   const g = examGroups(current).find(x=>x.name===ex.title);
   if (g && g.passed && !confirm(current.name+' already passed this exam. Create another attempt anyway?')) return;
   if (g && !g.passed){
@@ -932,7 +983,7 @@ $('makeLink').onclick = async ()=>{
 // View one attempt's answers; management can correct marks per question.
 function showAttempt(t, idx){
   const a = (t.exams||[])[idx]; if (!a) return;
-  const ex = exams.find(e=>e.id===a.examId);
+  const ex = examById(a.examId);
   const p = pctOf(a);
   let body = `<h2>${esc(a.name)}</h2><p class="note">${esc(t.name)} · ${fmtDate(a.date)} · ${a.auto?'Online exam':'Paper exam, recorded by '+esc(a.by||'-')}</p>
     <div class="result ${isPass(a)?'pass':'fail'}" style="padding:14px"><div class="big" style="font-size:40px">${fmtPct(p)}</div><div>${a.score} / ${a.total} marks · pass mark ${Math.round(passMarkFor(a.name,a.examId)*100)}% · ${isPass(a)?'Pass':'Fail'}</div></div>`;
@@ -941,7 +992,7 @@ function showAttempt(t, idx){
     body += ex.questions.map((q,i)=>{
       const d = a.detail[i] || {}, max = +q.points||1;
       return `<div class="rev"><b>Q${i+1}. ${esc(q.q)}</b>
-        <div class="ta ${(d.pts??0) >= max ? 'ok':'no'}">${esc(answerText(q, d.a))}</div>
+        ${q.type==='dish' ? dishReview(q.dish, d.a) : `<div class="ta ${(d.pts??0) >= max ? 'ok':'no'}">${esc(answerText(q, d.a))}</div>`}
         <div class="note">Expected: ${esc(correctText(q))}</div>
         <div class="row"><span class="note">Marks:</span>${editable?`<input type="number" class="mk" data-i="${i}" value="${d.pts??0}" min="0" max="${max}" step="0.5" style="width:80px">`:`<b>${d.pts??0}</b>`}<span class="note">/ ${max}</span></div></div>`;
     }).join('');
@@ -1021,15 +1072,21 @@ async function runExam(token){
     X = JSON.parse(raw);
     if (X.status==='done'){ return showResult(X.result.score, X.result.total, X.result.passMark, true); }
     if (Date.now() > X.expires){ box.innerHTML = '<h2>This exam link has expired</h2><p class="note">Ask your buddy or OIC for a new link.</p>'; return; }
-    const exRaw = await kvGet(EXAM_PREFIX+X.examId);
+    if (String(X.examId).startsWith('dish:')){
+      const dRaw = await kvGet(DISH_PREFIX+X.examId.slice(5));
+      if (!dRaw){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
+      XEX = dishExam(dec(dRaw));
+    }
+    const exRaw = XEX ? 'x' : await kvGet(EXAM_PREFIX+X.examId);
     if (!exRaw){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
-    XEX = dec(exRaw);
+    if (!XEX) XEX = dec(exRaw);
   }catch(e){ box.innerHTML = '<h2>Could not load the exam</h2><p class="note">Check your internet and refresh the page.</p>'; return; }
-  const answered = Object.keys(X.answers).length;
+  const answered = Object.keys(X.answers).length + (X.partial ? 1 : 0);
   if (answered===0){
     box.innerHTML = `<h2>${esc(XEX.title)}</h2>
       <p>Hello <b>${esc(X.traineeName)}</b>.</p>
-      <p>${XEX.questions.length} questions · ${totalPoints(XEX)} marks · pass mark ${XEX.passMark||85}%${XEX.timeLimit?' · time limit '+XEX.timeLimit+' minutes':''}</p>
+      <p>${XEX.questions[0].type==='dish'?'Dish exam':XEX.questions.length+' questions'} · ${totalPoints(XEX)} marks · pass mark ${XEX.passMark||85}%${XEX.timeLimit?' · time limit '+XEX.timeLimit+' minutes':''}</p>
+      ${XEX.questions[0].type==='dish'?'<p class="note">First type the bowl or glass it is served in. Then type every ingredient one at a time, including garnish and side sauce. Order does not matter. Each correct item earns a mark; each wrong item loses a mark.</p>':''}
       ${XEX.timeLimit?'<p class="note">The timer starts when you press Start. When time is up, the exam finishes automatically and unanswered questions get 0.</p>':''}
       <p class="note">Questions come one at a time. Once you submit an answer, it is locked and you cannot go back. Your result shows at the end.</p>
       <button class="btn primary" id="xStart">Start exam</button>`;
@@ -1054,6 +1111,7 @@ function showQuestion(){
   if (i<0) return finishExam();
   if (timeLeft()!==null && timeLeft()<=0) return finishExam(true);
   const q = XEX.questions[i], n = XEX.questions.length, box = $('examBox');
+  if (q.type==='dish') return dishQuestion(i, q);
   let input = '';
   if (q.type==='mcq') input = q.options.map((o,k)=>`<button class="opt" data-v="${k}">${esc(o)}</button>`).join('');
   else if (q.type==='truefalse') input = `<button class="opt" data-v="true">True</button><button class="opt" data-v="false">False</button>`;
@@ -1101,7 +1159,8 @@ async function finishExam(timeUp){
   if (finishing) return; finishing = true; clearInterval(clock);
   const box = $('examBox'); box.innerHTML = `<p class="note">${timeUp?'Time is up. ':''}Marking your exam...</p>`;
   if (timeUp){ try{ X = JSON.parse(await kvGet(LINK_PREFIX+X.token, true)); }catch(e){} }
-  const detail = XEX.questions.map((q,i)=>({ a:X.answers[i], pts: scoreQuestion(q, X.answers[i]) }));
+  const ansOf = i => (i in X.answers) ? X.answers[i] : (X.partial && X.partial[i]);   // time-up: keep what was typed
+  const detail = XEX.questions.map((q,i)=>({ a:ansOf(i), pts: scoreQuestion(q, ansOf(i)) }));
   const score = Math.round(detail.reduce((s,d)=>s+d.pts,0)*100)/100, total = totalPoints(XEX), passMark = XEX.passMark||85;
   try{
     await saveTrainee(X.traineeId, t=>{
@@ -1128,6 +1187,258 @@ function showResult(score, total, passMark, again){
     <p class="note" style="text-align:center;margin-top:12px">${again?'This exam has already been completed. ':''}${pass?'Well done. Your result has been sent to your buddy and manager.':'Your result has been sent to your buddy. They will arrange a retake after more practice.'}</p>`;
 }
 
+/* ============ DISHES ============ */
+const DISH_PREFIX = 'training_dish_', DIMG_PREFIX = 'training_dimg_';
+let dishes = [];
+const imgCache = {};
+async function loadDishes(){
+  dishes = []; (await kvPrefix(DISH_PREFIX)).forEach(v=>{ try{ dishes.push(dec(v)); }catch(e){} });
+  dishes.sort((a,b)=> (a.brand||'').localeCompare(b.brand||'') || a.name.localeCompare(b.name));
+}
+const imgKey = (id, n) => `${id}_${pad(n)}`;
+async function getImg(key){
+  if (!(key in imgCache)) imgCache[key] = kvGet(DIMG_PREFIX+key).catch(()=>null);
+  return imgCache[key];
+}
+function examById(id){
+  if (!id) return null;
+  if (String(id).startsWith('dish:')){ const d = dishes.find(x=>'dish:'+x.id===id); return d ? dishExam(d) : null; }
+  return exams.find(e=>e.id===id) || null;
+}
+// A dish becomes a one-question exam: name the bowl/glass, then every ingredient.
+function dishExam(d){
+  return { id:'dish:'+d.id, title:'Dish exam: '+d.name, passMark:d.passMark||85, retakeGap:d.retakeGap??1, timeLimit:d.timeLimit||0, active:d.active,
+    questions:[{ type:'dish', dish:d, q:`Build the ${d.name}`, points: 1 + d.ingredients.length }] };
+}
+// Dish items are compared as whole names (small spelling mistakes allowed), ignoring words like
+// "fresh", "sliced" or "julienne" - so "condensed milk" is NOT accepted for "milk".
+const FILLER = /\b(fresh|sliced|slices|chopped|cooked|roasted|julienne|julienned|shredded|cut|whole|half|halves|piece|pieces|some|little|few|diced|cubed|fried|boiled|raw|ripe|small|big|large|of|with)\b/g;
+const dn = x => norm(x).replace(FILLER,' ').replace(/\s+/g,' ').trim();
+function dishMatch(entry, v){ const a = dn(entry), b = dn(v); return !!a && !!b && (a===b || closeEnough(a, b)); }
+// Bowl/glass right = 1 mark. Each correct ingredient = 1 mark. Each wrong item = minus 1. Order does not matter. Never below 0.
+function dishScore(d, ans){
+  const out = { vessel:false, items:[], missed:[], score:0, total:1+d.ingredients.length };
+  if (!ans || typeof ans!=='object') { out.missed = d.ingredients.map(i=>i.name); return out; }
+  out.vessel = !!ans.vessel && d.vessel.accept.concat(d.vessel.name).some(v=>dishMatch(ans.vessel, v));
+  const used = new Set();
+  (ans.items||[]).forEach(entry=>{
+    let best=-1, bestScore=0;
+    d.ingredients.forEach((ing,k)=>{
+      if (used.has(k)) return;
+      ing.accept.concat(ing.name).forEach(v=>{
+        const sc = norm(entry)===norm(v) ? 3 : dishMatch(entry, v) ? 1 + norm(v).length/100 : 0;
+        if (sc > bestScore){ bestScore = sc; best = k; }
+      });
+    });
+    if (best>=0){ used.add(best); out.items.push({ entry, ok:true, as:d.ingredients[best].name }); }
+    else out.items.push({ entry, ok:false });
+  });
+  out.missed = d.ingredients.filter((_,k)=>!used.has(k)).map(i=>i.name);
+  const raw = (out.vessel?1:0) + out.items.filter(x=>x.ok).length - out.items.filter(x=>!x.ok).length;
+  out.score = Math.max(0, raw);
+  return out;
+}
+// Trainee side of a dish exam. Every entry is saved at once and cannot be removed.
+function dishQuestion(i, q){
+  const d = q.dish, box = $('examBox');
+  const part = (X.partial && X.partial[i]) || { vessel:null, items:[] };
+  const kind = /glass/i.test(d.vessel.name) || d.category==='Drink' ? 'glass' : 'bowl or plate';
+  const save = async (mut)=>{
+    const fresh = JSON.parse(await kvGet(LINK_PREFIX+X.token, true));
+    if (fresh.status==='done' || (i in fresh.answers)){ X = fresh; return false; }
+    fresh.partial = fresh.partial || {}; const p = fresh.partial[i] = fresh.partial[i] || { vessel:null, items:[] };
+    mut(p); await kvSet(LINK_PREFIX+X.token, JSON.stringify(fresh)); X = fresh; return true;
+  };
+  const draw = async ()=>{
+    const p = (X.partial && X.partial[i]) || part;
+    let html = `<div class="qnum">${XEX.timeLimit?'<span class="timer" id="xTimer"></span>':''}Dish exam · ${esc(d.name)}</div>
+      <div class="qtext">${esc(d.name)}</div>`;
+    if (!p.vessel){
+      html += `<p>Which ${kind} is ${esc(d.name)} served in?</p>
+        <input class="ans" id="dxVessel" placeholder="Type the ${kind} name" autocomplete="off">
+        <div class="row" style="margin-top:10px"><button class="btn primary" id="dxVesselGo">Continue</button></div>`;
+    } else {
+      html += `<p class="note">${kind==='glass'?'Glass':'Bowl'}: <b>${esc(p.vessel)}</b>. Now type each ingredient one at a time, including garnish and side sauce. Wrong items lose marks.</p>
+        <div class="plate"><img id="dxImg" alt="Empty ${kind}"><div class="tags">${p.items.map(t=>`<span>${esc(t)}</span>`).join('')}</div></div>
+        <div class="row"><input class="ans grow" id="dxItem" placeholder="Type an ingredient" autocomplete="off" style="flex:1"><button class="btn primary" id="dxAdd">Add</button></div>
+        <p class="note">${p.items.length} item${p.items.length===1?'':'s'} added. Items can't be removed once added.</p>
+        <div class="row" style="margin-top:10px"><button class="btn" id="dxDone" ${p.items.length?'':'disabled'}>Finish dish</button></div>`;
+    }
+    html += `<p class="note err hidden" id="xErr"></p>`;
+    box.innerHTML = html;
+    const err = m=>{ $('xErr').textContent=m; $('xErr').classList.remove('hidden'); };
+    if (!p.vessel){
+      $('dxVessel').focus();
+      const go = async ()=>{ const v = $('dxVessel').value.trim(); if (!v) return err('Type the '+kind+' name.');
+        $('dxVesselGo').disabled = true;
+        try{ if (await save(pp=>{ if (!pp.vessel) pp.vessel = v; })) draw(); else showQuestion(); }catch(e){ err('Could not save. Check your internet.'); $('dxVesselGo').disabled=false; } };
+      $('dxVesselGo').onclick = go; $('dxVessel').addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
+    } else {
+      getImg(imgKey(d.id,1)).then(src=>{ const el=$('dxImg'); if (el && src) el.src = src; });
+      $('dxItem').focus();
+      const add = async ()=>{ const v = $('dxItem').value.trim(); if (!v) return;
+        if (p.items.some(x=>norm(x)===norm(v))) return err('You already added that.');
+        $('dxAdd').disabled = true;
+        try{ if (await save(pp=>{ if (!pp.items.some(x=>norm(x)===norm(v))) pp.items.push(v); })) draw(); else showQuestion(); }catch(e){ err('Could not save. Check your internet.'); $('dxAdd').disabled=false; } };
+      $('dxAdd').onclick = add; $('dxItem').addEventListener('keydown', e=>{ if(e.key==='Enter') add(); });
+      $('dxDone').onclick = async ()=>{
+        if (!confirm('Finish this dish? You cannot add more items after this.')) return;
+        $('dxDone').disabled = true;
+        try{
+          const fresh = JSON.parse(await kvGet(LINK_PREFIX+X.token, true));
+          if (!(i in fresh.answers)) fresh.answers[i] = (fresh.partial && fresh.partial[i]) || p;
+          await kvSet(LINK_PREFIX+X.token, JSON.stringify(fresh)); X = fresh; showQuestion();
+        }catch(e){ err('Could not save. Check your internet.'); $('dxDone').disabled=false; }
+      };
+    }
+    if (XEX.timeLimit){ clearInterval(clock); const tick=()=>{ const ms=timeLeft(), el=$('xTimer'); if(!el) return; if(ms<=0){ clearInterval(clock); return finishExam(true); } el.textContent=`Time left ${Math.floor(ms/60000)}:${pad(Math.floor(ms%60000/1000))}`; el.classList.toggle('low', ms<120000); }; tick(); clock=setInterval(tick,1000); }
+  };
+  draw();
+}
+// Detailed dish breakdown for the answer review.
+function dishReview(d, a){
+  const r = dishScore(d, a);
+  return `<div class="chips"><span class="chip ${r.vessel?'ok':'no'}">${esc((a&&a.vessel)||'(no bowl/glass)')}</span>${r.vessel?'':`<span class="chip miss">${esc(d.vessel.name)}</span>`}</div>
+    <div class="chips">${r.items.map(x=>`<span class="chip ${x.ok?'ok':'no'}">${esc(x.entry)}</span>`).join('')}${r.missed.map(m=>`<span class="chip miss">missed: ${esc(m)}</span>`).join('')}</div>
+    <p class="note">${r.items.filter(x=>x.ok).length} correct, ${r.items.filter(x=>!x.ok).length} wrong (minus ${r.items.filter(x=>!x.ok).length}), ${r.missed.length} missed.</p>`;
+}
+
+// ---- Training slides
+let dView = { d:null, i:0, timer:null, fromApp:false };
+async function openDishes(fromApp){
+  dView.fromApp = fromApp;
+  if (fromApp) $('app').classList.add('hidden');
+  $('dishView').classList.remove('hidden'); $('pageTitle').textContent = 'Dish training';
+  $('dishTopBar').classList.toggle('hidden', !fromApp);
+  $('dishPlayer').classList.add('hidden'); $('dishList').classList.remove('hidden');
+  $('dishList').innerHTML = '<p class="note">Loading dishes...</p>';
+  if (!fromApp){ try{ await loadDishes(); }catch(e){ $('dishList').innerHTML='<p class="note err">Could not load. Check your internet and refresh.</p>'; return; } }
+  const list = dishes.filter(d=>d.active!==false);
+  const brands = [...new Set(list.map(d=>d.brand||'Other'))];
+  $('dishList').innerHTML = list.length ? `<h2>Dishes</h2><p class="note">Tap a dish to see how it is built, step by step.</p>` + brands.map(b=>`<h3>${esc(BRAND_NAMES[b]||b)}</h3><div class="dgrid">${list.filter(d=>(d.brand||'Other')===b).map(d=>`<button class="dcard" data-d="${esc(d.id)}"><div class="ph"><img data-k="${esc(imgKey(d.id,d.stepCount))}" alt=""></div><b>${esc(d.name)}</b><span>${esc(d.category||'')} · ${d.stepCount} steps</span></button>`).join('')}</div>`).join('')
+    : '<p class="note">No dishes uploaded yet.</p>';
+  $('dishList').querySelectorAll('img[data-k]').forEach(im=>getImg(im.dataset.k).then(src=>{ if (src) im.src = src; }));
+  $('dishList').querySelectorAll('.dcard').forEach(b=>b.onclick=()=>openSlides(dishes.find(d=>d.id===b.dataset.d)));
+}
+function openSlides(d){
+  dView.d = d; dView.i = 0; stopSlides();
+  $('dishList').classList.add('hidden'); $('dishPlayer').classList.remove('hidden');
+  $('dishTopBar').classList.remove('hidden');
+  $('dpTitle').textContent = d.name; $('dpSub').textContent = `${BRAND_NAMES[d.brand]||d.brand||''} · ${d.category||''} · served in ${d.vessel.name}`;
+  for (let n=1;n<=d.stepCount;n++) getImg(imgKey(d.id,n));   // preload
+  renderSlide(); window.scrollTo(0,0);
+}
+async function renderSlide(){
+  const d = dView.d, i = dView.i, st = d.steps[i];
+  $('dpCnt').textContent = `Step ${i+1} of ${d.stepCount}`;
+  $('dpText').textContent = st.text;
+  const added = d.steps.slice(0, i+1).flatMap(s=>s.adds), fresh = new Set(st.adds);
+  const role = n => (d.ingredients.find(x=>x.name===n)||{}).role;
+  $('dpChips').innerHTML = added.map(n=>`<span class="chip ${fresh.has(n)?'new':''} ${role(n)||''}">${esc(n)}${role(n)==='garnish'?' · garnish':role(n)==='sauce'?' · sauce':''}</span>`).join('');
+  $('dpPrev').disabled = i===0; $('dpNext').disabled = i===d.stepCount-1;
+  const img = $('dpImg'); img.style.opacity = .3;
+  const src = await getImg(imgKey(d.id, i+1));
+  if (dView.d===d && dView.i===i){ img.src = src||''; img.style.opacity = 1; }
+}
+function stopSlides(){ clearInterval(dView.timer); dView.timer=null; $('dpPlay').textContent='▶ Play'; }
+function moveSlide(k){ const n = dView.d.stepCount; dView.i = Math.max(0, Math.min(n-1, dView.i+k)); renderSlide(); }
+$('dpPrev').onclick = ()=>{ stopSlides(); moveSlide(-1); };
+$('dpNext').onclick = ()=>{ stopSlides(); moveSlide(1); };
+$('dpPlay').onclick = ()=>{
+  if (dView.timer) return stopSlides();
+  if (dView.i===dView.d.stepCount-1){ dView.i=0; renderSlide(); }
+  $('dpPlay').textContent='❚❚ Pause';
+  dView.timer = setInterval(()=>{ if (dView.i>=dView.d.stepCount-1) return stopSlides(); moveSlide(1); }, 3000);
+};
+let dsx = null;
+$('dpSlide').addEventListener('touchstart', e=>{ dsx=e.touches[0].clientX; }, {passive:true});
+$('dpSlide').addEventListener('touchend', e=>{ if(dsx===null) return; const dx=e.changedTouches[0].clientX-dsx; if(Math.abs(dx)>40){ stopSlides(); moveSlide(dx<0?1:-1); } dsx=null; });
+$('dishHome').onclick = ()=>{
+  stopSlides();
+  if (!$('dishPlayer').classList.contains('hidden')){ $('dishPlayer').classList.add('hidden'); $('dishList').classList.remove('hidden'); $('dishTopBar').classList.toggle('hidden', !dView.fromApp); return; }
+  $('dishView').classList.add('hidden'); $('app').classList.remove('hidden'); $('pageTitle').textContent='Training tracker'; show('listView'); renderOverview();
+};
+$('dishBtn').onclick = ()=>openDishes(true);
+
+// ---- Dish bank (upload / manage)
+function validateDish(d){
+  if (!d || !d.id || !d.name) return 'The dish file needs an "id" and a "name".';
+  if (!d.vessel || !d.vessel.name) return 'The dish file needs the bowl/glass ("vessel").';
+  if (!Array.isArray(d.ingredients) || !d.ingredients.length) return 'The dish file has no ingredients.';
+  if (!Array.isArray(d.steps) || d.steps.length < 2) return 'The dish file needs at least 2 step photos.';
+  if (d.steps.some(s=>!String(s.img||'').startsWith('data:image'))) return 'Every step needs a photo.';
+  return null;
+}
+$('dishFile').onchange = async e=>{
+  const f = e.target.files[0]; if (!f) return;
+  $('dishErr').classList.add('hidden');
+  const prog = m=>{ $('dishProg').textContent=m; $('dishProg').classList.toggle('hidden', !m); };
+  try{
+    const d = JSON.parse(await f.text()), problem = validateDish(d);
+    if (problem) throw new Error(problem);
+    const old = dishes.find(x=>x.id===d.id);
+    if (old && !confirm(`Replace "${old.name}" with this new version? Past exam results stay on record.`)){ e.target.value=''; return; }
+    for (let n=0;n<d.steps.length;n++){ prog(`Uploading photo ${n+1} of ${d.steps.length}...`); await kvSet(DIMG_PREFIX+imgKey(d.id,n+1), d.steps[n].img); delete imgCache[imgKey(d.id,n+1)]; }
+    const meta = { ...d, stepCount:d.steps.length, steps:d.steps.map(s=>({text:s.text, adds:s.adds||[]})), active: old ? old.active : true,
+      passMark: old ? old.passMark : (d.passMark||85), retakeGap: old ? old.retakeGap : 1, uploaded:new Date().toISOString() };
+    await kvSet(DISH_PREFIX+d.id, enc(meta));
+    await loadDishes(); prog(''); toast('Dish uploaded: '+d.name); renderDishBank();
+  }catch(err){ prog(''); $('dishErr').textContent = err instanceof SyntaxError ? 'This file could not be read. Upload the dish .json file.' : err.message; $('dishErr').classList.remove('hidden'); }
+  e.target.value='';
+};
+function renderDishBank(){
+  const isM = level==='master';
+  $('dishFile').disabled = !isM;
+  $('dishTable').innerHTML = dishes.length ? dishes.map(d=>`<tr>
+      <td><b>${esc(d.name)}</b><div class="note" style="margin:0">${esc(d.category||'')} · ${esc(d.vessel.name)}</div></td>
+      <td>${esc(d.brand||'-')}</td><td>${d.stepCount}</td><td>${1+d.ingredients.length}</td>
+      <td style="white-space:nowrap">${isM?`<input type="number" data-dpm="${esc(d.id)}" value="${d.passMark||85}" min="1" max="100" style="width:64px"> %`:(d.passMark||85)+'%'}</td>
+      <td><span class="pill ${d.active===false?'s-wait':'s-ok'}">${d.active===false?'Hidden':'Active'}</span></td>
+      <td style="white-space:nowrap">${isM?`<button class="btn small" data-dtog="${esc(d.id)}">${d.active===false?'Show':'Hide'}</button> `:''}<button class="btn small" data-dview="${esc(d.id)}">Slides</button></td></tr>`).join('')
+    : `<tr><td colspan="7" class="note">No dishes uploaded yet.</td></tr>`;
+  const saveMeta = async d=>{ await kvSet(DISH_PREFIX+d.id, enc(d)); };
+  $('dishTable').querySelectorAll('[data-dpm]').forEach(inp=>inp.onchange=async ()=>{
+    const d = dishes.find(x=>x.id===inp.dataset.dpm), v = Math.round(parseFloat(inp.value));
+    if (!(v>=1 && v<=100)){ toast('Enter a pass mark between 1 and 100'); inp.value=d.passMark||85; return; }
+    d.passMark = v; try{ await saveMeta(d); toast(`Pass mark for ${d.name}: ${v}%`); }catch(e){ toast('Could not save. Check your internet.'); }
+  });
+  $('dishTable').querySelectorAll('[data-dtog]').forEach(b=>b.onclick=async ()=>{
+    const d = dishes.find(x=>x.id===b.dataset.dtog); d.active = d.active===false;
+    try{ await saveMeta(d); toast(d.active?'Dish is now visible':'Dish hidden'); renderDishBank(); }catch(e){ toast('Could not save. Check your internet.'); }
+  });
+  $('dishTable').querySelectorAll('[data-dview]').forEach(b=>b.onclick=()=>{ openDishes(true).then(()=>openSlides(dishes.find(d=>d.id===b.dataset.dview))); });
+}
+
+// ---- Daily quiz questions made automatically from dishes
+function hashStr(s){ let h=2166136261; for (const c of s){ h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h>>>0; }
+function shuffleSeeded(arr, rnd){ const a=[...arr]; for (let i=a.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function mcq(q, right, wrongs, rnd, extra){
+  const opts = shuffleSeeded([right, ...wrongs.slice(0,3)], rnd);
+  return { q, options:opts, answer:opts.indexOf(right), ...extra };
+}
+function dishQuestions(){
+  const list = dishes.filter(d=>d.active!==false), out = [];
+  const allIng = [...new Set(list.flatMap(d=>d.ingredients.map(i=>i.name)))];
+  const extraIng = ['Pineapple','Cashew nuts','Bean sprouts','Coriander','Mint leaves','Tofu','Boiled egg','Spring onion'];
+  const extraVessels = ['White ceramic bowl','Clay pot','Highball glass','Wooden plate','Blue Rock Bowl','Serving glass','Black stone plate'];
+  const extraDishes = ['Tom Yum','Pad Thai','Massaman Curry','Mango Sticky Rice','Red Curry','Larb Chicken'];
+  list.forEach(d=>{
+    const rnd = seeded(hashStr(d.id)), mine = d.ingredients.map(i=>i.name), finalImg = imgKey(d.id, d.stepCount);
+    const notMine = shuffleSeeded([...allIng, ...extraIng].filter(x=>!mine.some(m=>norm(m)===norm(x))), rnd);
+    if (mine.length >= 3) out.push(mcq(`Which of these is NOT in ${d.name}?`, notMine[0], shuffleSeeded(mine, rnd), rnd, { imgKey:finalImg, explain:`${d.name} has: ${mine.join(', ')}.` }));
+    const seq = d.steps.flatMap(s=>s.adds);
+    if (seq.length >= 5){
+      const p = Math.floor(rnd()*(seq.length-1)), right = seq[p+1];
+      out.push(mcq(`In ${d.name}, what goes in right after ${seq[p]}?`, right, shuffleSeeded(seq.filter(x=>x!==right && x!==seq[p]), rnd), rnd, { imgKey:imgKey(d.id, Math.min(d.stepCount, p+2)), explain:`Order: ${seq.join(' → ')}.` }));
+    }
+    const vessels = shuffleSeeded([...new Set([...list.map(x=>x.vessel.name), ...extraVessels])].filter(v=>norm(v)!==norm(d.vessel.name)), rnd);
+    out.push(mcq(`What is ${d.name} served in?`, d.vessel.name, vessels, rnd, { imgKey:finalImg }));
+    const names = shuffleSeeded([...new Set([...list.map(x=>x.name), ...extraDishes])].filter(n=>n!==d.name), rnd);
+    out.push(mcq('Which dish is this?', d.name, names, rnd, { imgKey:finalImg }));
+  });
+  return out;
+}
+
 /* ============ DAILY QUIZ ============ */
 const QUIZ_POOL = 'training_quiz_pool', QUIZ_CFG = 'training_quiz_cfg', PLAYER_PREFIX = 'training_p_';
 const PER_DAY = 3;
@@ -1140,9 +1451,11 @@ async function loadQuiz(){
 }
 function seeded(seed){ return ()=>{ seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 // Same 3 questions for everyone today; the pool is gone through in a fixed shuffled order before any repeat.
+function allQuestions(){ return [...((qPool && qPool.questions) || []), ...dishQuestions()]; }
 function todaysQuestions(){
-  if (!qPool || qPool.questions.length < PER_DAY) return [];
-  const n = qPool.questions.length, rnd = seeded(qPool.seed || 7), order = [...Array(n).keys()];
+  const n = allQuestions().length;
+  if (n < PER_DAY) return [];
+  const rnd = seeded((qPool && qPool.seed) || 7), order = [...Array(n).keys()];
   for (let i=n-1;i>0;i--){ const j = Math.floor(rnd()*(i+1)); [order[i],order[j]] = [order[j],order[i]]; }
   const d = Math.max(0, Math.floor((parseDate(todayStr()) - parseDate(qCfg.start)) / 86400000));
   return Array.from({length:PER_DAY}, (_,k)=> order[(d*PER_DAY + k) % n]);
@@ -1173,7 +1486,7 @@ let me = null;
 async function runDaily(){
   $('gate').classList.add('hidden'); $('dailyView').classList.remove('hidden'); $('pageTitle').textContent = 'Daily quiz';
   const box = $('dailyBox'); box.innerHTML = '<p class="note">Loading...</p>';
-  try{ await Promise.all([loadOutlets(), loadQuiz()]); }
+  try{ await Promise.all([loadOutlets(), loadQuiz(), loadDishes()]); }
   catch(e){ box.innerHTML = '<h2>Could not load the quiz</h2><p class="note">Check your internet and refresh the page.</p>'; return; }
   if (!todaysQuestions().length){ box.innerHTML = '<h2>No quiz today</h2><p class="note">Questions haven\'t been added yet. Check back soon.</p>'; return; }
   let saved = null; try{ saved = localStorage.getItem('training_player'); }catch(e){}
@@ -1227,13 +1540,14 @@ async function dailyPlay(){
   const box = $('dailyBox'), qs = todaysQuestions(), today = todayStr();
   const mine = (me.days||{})[today] || [];
   if (mine.length >= qs.length) return dailyDone();
-  const k = mine.length, q = qPool.questions[qs[k]];
+  const k = mine.length, q = allQuestions()[qs[k]];
   box.innerHTML = `<div class="row" style="justify-content:space-between"><span class="qnum">Question ${k+1} of ${qs.length} · today</span><a href="#" id="notMe" class="note">Not ${esc(me.name.split(' ')[0])}?</a></div>
     <div class="bar"><i style="width:${Math.round(k/qs.length*100)}%"></i></div>
-    ${q.image?`<img class="qimg" src="${esc(q.image)}" alt="">`:''}
+    ${q.image?`<img class="qimg" src="${esc(q.image)}" alt="">`:''}${q.imgKey?`<img class="qimg" id="dImg" alt="">`:''}
     <div class="qtext">${esc(q.q)}</div>
     ${q.options.map((o,i)=>`<button class="opt" data-i="${i}">${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     <div id="dFb"></div>`;
+  if (q.imgKey) getImg(q.imgKey).then(src=>{ const el=$('dImg'); if (el && src) el.src = src; });
   $('notMe').onclick = e=>{ e.preventDefault(); try{ localStorage.removeItem('training_player'); }catch(err){} me=null; dailyJoin(); };
   box.querySelectorAll('.opt').forEach(b=>b.onclick = async ()=>{
     box.querySelectorAll('.opt').forEach(x=>x.disabled=true);
@@ -1266,7 +1580,7 @@ function dailyDone(){
 // ---- Admin side
 async function openQuizAdmin(){
   show('quizView'); $('quizLb').innerHTML = '<p class="note">Loading...</p>';
-  try{ await loadQuiz(); }catch(e){ $('quizLb').innerHTML = '<p class="note err">Could not load. Check your internet.</p>'; return; }
+  try{ await Promise.all([loadQuiz(), loadDishes()]); }catch(e){ $('quizLb').innerHTML = '<p class="note err">Could not load. Check your internet.</p>'; return; }
   const url = location.origin + location.pathname + '?daily';
   $('quizLink').textContent = url;
   $('quizShare').href = 'https://wa.me/?text=' + encodeURIComponent(`Daily quiz is live! 3 quick questions every day. Top 10 on the leaderboard get the bragging rights. Play here: ${url}`);
@@ -1276,14 +1590,14 @@ async function openQuizAdmin(){
   $('quizStats').textContent = `${players.length} staff joined · ${played} played today`;
   $('quizLb').innerHTML = lbTable(rows, null);
   const qs = todaysQuestions();
-  $('quizToday').innerHTML = qs.length ? qs.map((i,k)=>{ const q = qPool.questions[i];
+  $('quizToday').innerHTML = qs.length ? qs.map((i,k)=>{ const q = allQuestions()[i];
     const answered = players.map(p=>((p.days||{})[today]||[])[k]).filter(Boolean);
     const right = answered.filter(a=>a.ok).length;
     return `<div class="rev"><b>${k+1}. ${esc(q.q)}</b><div class="note" style="color:var(--green)">Answer: ${esc(q.options[q.answer])}</div>
       <div class="note">${answered.length ? `${right} of ${answered.length} answered correctly (${Math.round(right/answered.length*100)}%)` : 'No answers yet'}</div></div>`; }).join('')
     : '<p class="note">Upload a question pool (at least 3 questions) to start.</p>';
   const isMaster = level==='master';
-  $('quizPoolInfo').textContent = qPool ? `${qPool.questions.length} questions in the pool (enough for ${Math.floor(qPool.questions.length/PER_DAY)} days before questions repeat).${isMaster?' Uploading a new file replaces the pool; scores are kept.':''}` : 'No question pool yet.';
+  $('quizPoolInfo').textContent = (dishQuestions().length?`${dishQuestions().length} dish questions are created automatically from the Dish bank. `:'') + (qPool ? `${qPool.questions.length} questions in the uploaded pool (${Math.floor(allQuestions().length/PER_DAY)} days of questions in total before any repeat).${isMaster?' Uploading a new file replaces the pool; scores are kept.':''}` : 'No uploaded question pool yet.');
   $('quizFile').disabled = !isMaster; $('quizSeason').classList.toggle('hidden', !isMaster);
 }
 function validatePool(p){
@@ -1341,11 +1655,12 @@ $('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
 (async ()=>{
   const token = new URLSearchParams(location.search).get('exam');
   if (token){ $('banner').classList.add('hidden'); return runExam(token); }
+  if (new URLSearchParams(location.search).has('dishes')){ $('banner').classList.add('hidden'); $('gate').classList.add('hidden'); return openDishes(false); }
   if (new URLSearchParams(location.search).has('daily')){ $('banner').classList.add('hidden'); return runDaily(); }
   try{
     const a = await kvGet('access_passwords'); if (a) access = JSON.parse(a);
     if (access.whatsapp) $('banner').href = 'https://wa.me/'+access.whatsapp;
-    await Promise.all([loadOutlets(), loadAll(), loadExams()]);
+    await Promise.all([loadOutlets(), loadAll(), loadExams(), loadDishes()]);
     $('loading').classList.add('hidden'); $('pw').disabled=false; $('pwGo').disabled=false; $('pw').focus();
   }catch(e){
     $('loading').textContent = 'Could not connect. Check your internet and refresh the page.';
