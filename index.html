@@ -292,7 +292,7 @@
         <p class="note" id="quizPoolInfo"></p>
         <div class="row"><input type="file" id="quizFile" accept=".json,application/json"></div>
         <p class="note err hidden" id="quizErr"></p>
-        <div class="row" style="margin-top:10px"><button class="btn danger" id="quizSeason">Start a new season (reset scores)</button></div>
+        <div class="row" style="margin-top:10px"><button class="btn danger" id="quizSeason">Start a new season (reset scores)</button><button class="btn danger" id="quizDelPool">Delete uploaded question pool</button></div>
       </div>
     </div>
 
@@ -480,9 +480,10 @@ const dec = s => JSON.parse(s.startsWith('enc:') ? decodeURIComponent(escape(ato
 async function loadAll(){
   trainees = []; (await kvPrefix(PREFIX)).forEach(v=>{ try{ trainees.push(JSON.parse(v)); }catch(e){} });
 }
+let allExams = [];
 async function loadExams(){
-  exams = []; (await kvPrefix(EXAM_PREFIX)).forEach(v=>{ try{ exams.push(dec(v)); }catch(e){} });
-  exams.sort((a,b)=>a.title.localeCompare(b.title));
+  allExams = []; (await kvPrefix(EXAM_PREFIX)).forEach(v=>{ try{ allExams.push(dec(v)); }catch(e){} });
+  exams = allExams.filter(e=>!e.deleted).sort((a,b)=>a.title.localeCompare(b.title));
 }
 // Always re-reads the latest saved version before changing it, so two phones can't overwrite each other.
 async function saveTrainee(id, change){
@@ -808,7 +809,7 @@ function renderBank(){
       <td>${ex.questions.length}</td><td>${totalPoints(ex)}</td>
       ${[['passMark',85,'%'],['timeLimit',0,'min'],['retakeGap',1,'days']].map(([k,def,u])=>`<td style="white-space:nowrap">${level==='master'?`<input type="number" data-f="${k}" data-ex="${esc(ex.id)}" value="${ex[k]??def}" min="0" style="width:64px"> ${u}`:((ex[k]??def)||(k==='timeLimit'?'None':0))+(k==='timeLimit'&&!ex[k]?'':' '+u)}</td>`).join('')}
       <td><span class="pill ${ex.active===false?'s-wait':'s-ok'}">${ex.active===false?'Hidden':'Active'}</span></td>
-      <td>${level==='master'?`<button class="btn small" data-tog="${esc(ex.id)}">${ex.active===false?'Show':'Hide'}</button> `:''}<button class="btn small" data-prev="${esc(ex.id)}">Preview</button></td></tr>`).join('')
+      <td>${level==='master'?`<button class="btn small" data-tog="${esc(ex.id)}">${ex.active===false?'Show':'Hide'}</button> `:''}<button class="btn small" data-prev="${esc(ex.id)}">Preview</button>${level==='master'?` <button class="btn small danger" data-del="${esc(ex.id)}">Delete</button>`:''}</td></tr>`).join('')
     : `<tr><td colspan="8" class="note">No exams uploaded yet.${level==='master'?' Choose an exam file above to add the first one.':''}</td></tr>`;
   $('bank').querySelectorAll('[data-tog]').forEach(b=>b.onclick=async ()=>{
     const ex = exams.find(x=>x.id===b.dataset.tog); ex.active = ex.active===false;
@@ -821,6 +822,12 @@ function renderBank(){
     if (!(v>=lo && v<=hi)){ toast(`${label} must be between ${lo} and ${hi}`); inp.value = ex[k] ?? (k==='passMark'?85:k==='retakeGap'?1:0); return; }
     ex[k] = v;
     try{ await kvSet(EXAM_PREFIX+ex.id, enc(ex)); toast(`${label} for ${ex.title}: ${v}${u}`); }catch(e){ toast('Could not save. Check your internet.'); }
+  });
+  $('bank').querySelectorAll('[data-del]').forEach(b=>b.onclick=async ()=>{
+    const ex = exams.find(x=>x.id===b.dataset.del);
+    if (!confirm(`Delete "${ex.title}"?\n\nIt disappears from the exam list and any unused links stop working. Results already taken stay on each trainee's record.`)) return;
+    try{ await kvSet(EXAM_PREFIX+ex.id, enc({ id:ex.id, title:ex.title, passMark:ex.passMark, questions:ex.questions, deleted:true, deletedAt:new Date().toISOString() }));
+      await loadExams(); toast('Exam deleted'); renderBank(); }catch(e){ toast('Could not delete. Check your internet.'); }
   });
   $('bank').querySelectorAll('[data-prev]').forEach(b=>b.onclick=()=>{
     const ex = exams.find(x=>x.id===b.dataset.prev);
@@ -1140,12 +1147,13 @@ async function runExam(token){
     if (Date.now() > X.expires){ box.innerHTML = '<h2>This exam link has expired</h2><p class="note">Ask your buddy or OIC for a new link.</p>'; return; }
     if (String(X.examId).startsWith('dish:')){
       const dRaw = await kvGet(DISH_PREFIX+X.examId.slice(5));
-      if (!dRaw){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
+      if (!dRaw || dec(dRaw).deleted){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
       XEX = dishExam(dec(dRaw));
     }
     const exRaw = XEX ? 'x' : await kvGet(EXAM_PREFIX+X.examId);
     if (!exRaw){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
     if (!XEX) XEX = dec(exRaw);
+    if (XEX.deleted){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
   }catch(e){ box.innerHTML = '<h2>Could not load the exam</h2><p class="note">Check your internet and refresh the page.</p>'; return; }
   const answered = Object.keys(X.answers).length + (X.partial ? 1 : 0);
   if (answered===0){
@@ -1257,9 +1265,10 @@ function showResult(score, total, passMark, again){
 const DISH_PREFIX = 'training_dish_', DIMG_PREFIX = 'training_dimg_';
 let dishes = [];
 const imgCache = {};
+let allDishes = [];
 async function loadDishes(){
-  dishes = []; (await kvPrefix(DISH_PREFIX)).forEach(v=>{ try{ dishes.push(dec(v)); }catch(e){} });
-  dishes.sort((a,b)=> (a.brand||'').localeCompare(b.brand||'') || a.name.localeCompare(b.name));
+  allDishes = []; (await kvPrefix(DISH_PREFIX)).forEach(v=>{ try{ allDishes.push(dec(v)); }catch(e){} });
+  dishes = allDishes.filter(d=>!d.deleted).sort((a,b)=> (a.brand||'').localeCompare(b.brand||'') || a.name.localeCompare(b.name));
 }
 const imgKey = (id, n) => `${id}_${pad(n)}`;
 async function getImg(key){
@@ -1268,8 +1277,8 @@ async function getImg(key){
 }
 function examById(id){
   if (!id) return null;
-  if (String(id).startsWith('dish:')){ const d = dishes.find(x=>'dish:'+x.id===id); return d ? dishExam(d) : null; }
-  return exams.find(e=>e.id===id) || null;
+  if (String(id).startsWith('dish:')){ const d = allDishes.find(x=>'dish:'+x.id===id); return d ? dishExam(d) : null; }
+  return allExams.find(e=>e.id===id) || null;
 }
 // A dish becomes a one-question exam: name the bowl/glass, then every ingredient.
 function dishExam(d){
@@ -1512,7 +1521,7 @@ function renderDishBank(){
       <td>${esc(d.brand||'-')}</td><td>${d.stepCount}</td><td>${1+d.ingredients.length}</td>
       <td style="white-space:nowrap">${isM?`<input type="number" data-dpm="${esc(d.id)}" value="${d.passMark||85}" min="1" max="100" style="width:64px"> %`:(d.passMark||85)+'%'}</td>
       <td><span class="pill ${d.active===false?'s-wait':'s-ok'}">${d.active===false?'Hidden':'Active'}</span></td>
-      <td style="white-space:nowrap">${isM?`<button class="btn small" data-dtog="${esc(d.id)}">${d.active===false?'Show':'Hide'}</button> `:''}<button class="btn small" data-dview="${esc(d.id)}">Slides</button></td></tr>`).join('')
+      <td style="white-space:nowrap">${isM?`<button class="btn small" data-dtog="${esc(d.id)}">${d.active===false?'Show':'Hide'}</button> `:''}<button class="btn small" data-dview="${esc(d.id)}">Slides</button>${isM?` <button class="btn small danger" data-ddel="${esc(d.id)}">Delete</button>`:''}</td></tr>`).join('')
     : `<tr><td colspan="7" class="note">No dishes uploaded yet.</td></tr>`;
   const saveMeta = async d=>{ await kvSet(DISH_PREFIX+d.id, enc(d)); };
   $('dishTable').querySelectorAll('[data-dpm]').forEach(inp=>inp.onchange=async ()=>{
@@ -1523,6 +1532,15 @@ function renderDishBank(){
   $('dishTable').querySelectorAll('[data-dtog]').forEach(b=>b.onclick=async ()=>{
     const d = dishes.find(x=>x.id===b.dataset.dtog); d.active = d.active===false;
     try{ await saveMeta(d); toast(d.active?'Dish is now visible':'Dish hidden'); renderDishBank(); }catch(e){ toast('Could not save. Check your internet.'); }
+  });
+  $('dishTable').querySelectorAll('[data-ddel]').forEach(b=>b.onclick=async ()=>{
+    const d = dishes.find(x=>x.id===b.dataset.ddel);
+    if (!confirm(`Delete "${d.name}"?\n\nIts slides, dish exam and quiz questions are removed and its photos are cleared. Results already taken stay on each trainee's record.`)) return;
+    try{
+      for (let n=1;n<=d.stepCount;n++){ await kvSet(DIMG_PREFIX+imgKey(d.id,n), ''); delete imgCache[imgKey(d.id,n)]; }
+      await kvSet(DISH_PREFIX+d.id, enc({ ...d, deleted:true, active:false, deletedAt:new Date().toISOString() }));
+      await loadDishes(); toast('Dish deleted'); renderDishBank();
+    }catch(e){ toast('Could not delete. Check your internet.'); }
   });
   $('dishTable').querySelectorAll('[data-dview]').forEach(b=>b.onclick=()=>{ openDishes(true).then(()=>openSlides(dishes.find(d=>d.id===b.dataset.dview))); });
   $('dishLinks').innerHTML = dishes.length ? 'Share links: ' + [...new Set(dishes.map(d=>catSlug(d.category)))].map(c=>`<a href="#" data-cl="${esc(c)}">${esc(catTitle(c))}</a>`).join(' · ') + ' · <a href="#" data-cl="">All dishes</a>' : '';
@@ -1717,8 +1735,8 @@ async function openQuizAdmin(){
       <div class="note">${answered.length ? `${right} of ${answered.length} answered correctly (${Math.round(right/answered.length*100)}%)` : 'No answers yet'}</div></div>`; }).join('')
     : '<p class="note">Upload a question pool (at least 3 questions) to start.</p>';
   const isMaster = level==='master';
-  $('quizPoolInfo').textContent = (dishQuestions().length?`${dishQuestions().length} dish questions are created automatically from the Dish bank. `:'') + (qPool ? `${qPool.questions.length} questions in the uploaded pool (${Math.floor(allQuestions().length/PER_DAY)} days of questions in total before any repeat).${isMaster?' Uploading a new file replaces the pool; scores are kept.':''}` : 'No uploaded question pool yet.');
-  $('quizFile').disabled = !isMaster; $('quizSeason').classList.toggle('hidden', !isMaster);
+  $('quizPoolInfo').textContent = (dishQuestions().length?`${dishQuestions().length} dish questions are created automatically from the Dish bank. `:'') + (qPool && qPool.questions.length ? `${qPool.questions.length} questions in the uploaded pool (${Math.floor(allQuestions().length/PER_DAY)} days of questions in total before any repeat).${isMaster?' Uploading a new file replaces the pool; scores are kept.':''}` : 'No uploaded question pool yet.');
+  $('quizFile').disabled = !isMaster; $('quizSeason').classList.toggle('hidden', !isMaster); $('quizDelPool').classList.toggle('hidden', !isMaster || !qPool || !qPool.questions.length);
 }
 function validatePool(p){
   const list = Array.isArray(p) ? p : p && p.questions;
@@ -1742,6 +1760,11 @@ $('quizFile').onchange = async e=>{
     toast('Question pool uploaded'); openQuizAdmin();
   }catch(err){ $('quizErr').textContent = err instanceof SyntaxError ? 'This file could not be read. Upload the .json pool file.' : err.message; $('quizErr').classList.remove('hidden'); }
   e.target.value='';
+};
+$('quizDelPool').onclick = async ()=>{
+  if (!qPool || !qPool.questions.length) return toast('There is no uploaded pool to delete.');
+  if (!confirm(`Delete the uploaded pool of ${qPool.questions.length} questions? Dish questions stay. Scores are kept.`)) return;
+  try{ await kvSet(QUIZ_POOL, enc({ questions:[], seed:qPool.seed, deletedAt:new Date().toISOString() })); toast('Question pool deleted'); openQuizAdmin(); }catch(e){ toast('Could not delete. Check your internet.'); }
 };
 $('quizSeason').onclick = async ()=>{
   if (!confirm('Start a new season? Everyone starts again from 0 points from today. Old answers stay saved.')) return;
