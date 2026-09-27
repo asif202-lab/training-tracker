@@ -136,6 +136,33 @@
   .plate .tags{position:absolute;inset:auto 8px 8px 8px;display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
   .plate .tags span{background:rgba(255,255,255,.92);color:#1d232b;font-size:13px;font-weight:700;padding:4px 10px;border-radius:14px;animation:drop .4s ease-out}
   @keyframes drop{from{transform:translateY(-14px);opacity:0}to{transform:none;opacity:1}}
+  .slide img.kb{animation:kb .7s ease-out}
+  @keyframes kb{from{opacity:.2;transform:scale(1.07)}to{opacity:1;transform:none}}
+  .dots{display:flex;gap:5px;justify-content:center;margin:12px 0 10px}
+  .dots i{width:9px;height:9px;border-radius:50%;background:#d5dae0;transition:all .3s}
+  .dots i.done{background:#8fb0cc} .dots i.on{background:var(--navy);width:24px;border-radius:5px}
+  .stepcard{background:linear-gradient(135deg,#1F4E78,#2d6a9f);color:#fff;border-radius:16px;padding:16px 16px 18px;text-align:center;box-shadow:0 6px 18px rgba(31,78,120,.25)}
+  .stepcard.pop{animation:pop2 .45s cubic-bezier(.2,.9,.3,1.3)}
+  @keyframes pop2{from{transform:translateY(10px) scale(.97);opacity:.4}to{transform:none;opacity:1}}
+  .stepcard.start{background:linear-gradient(135deg,#46505c,#6b7682)}
+  .stepcard.final{background:linear-gradient(135deg,#2e7d4f,#43a36b)}
+  .sc-badge{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.12em;background:rgba(255,255,255,.18);padding:4px 12px;border-radius:12px;margin-bottom:10px}
+  .sc-new{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:10px}
+  .sc-pill{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#1d232b;border-radius:28px;padding:8px 18px 8px 10px;font-size:21px;font-weight:800;box-shadow:0 3px 10px rgba(0,0,0,.18)}
+  .sc-pill .em{font-size:28px;line-height:1}
+  .sc-pill small{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:10px;margin-left:2px}
+  .sc-pill small.garnish{background:#e3f1df;color:#2e6b2a} .sc-pill small.sauce{background:#fbe6d4;color:#9a4a16}
+  .sc-text{font-size:17px;line-height:1.4;font-weight:500;opacity:.95}
+  .sc-big{font-size:22px;font-weight:800;margin:4px 0 6px}
+  .sofar{margin-top:12px;background:#f7f9fb;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+  .sofar-h{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+  .sofar .chip{font-size:14px;background:#fff;border:1px solid var(--line)}
+  .sofar .chip.new{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .recipe{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;text-align:left}
+  .recipe span{background:rgba(255,255,255,.95);color:#1d232b;border-radius:10px;padding:7px 10px;font-size:14px;font-weight:700}
+  .recipe b{color:#2e7d4f;margin-right:4px}
+  .teaser{display:block;width:100%;margin-top:12px;font:inherit;font-size:15px;font-weight:700;color:#8a6d00;background:#fff7dd;border:2px dashed #e6c35c;border-radius:14px;padding:12px;cursor:pointer}
+  .teaser:hover{background:#fff1c4}
   .sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:12px}
   .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px}
   .tcard .nm{font-size:16px;font-weight:700}
@@ -172,8 +199,10 @@
     <div class="card hidden" id="dishPlayer">
       <h2 id="dpTitle" style="margin-bottom:2px"></h2><p class="note" id="dpSub" style="margin-top:0"></p>
       <div class="slide" id="dpSlide"><span class="cnt" id="dpCnt"></span><img id="dpImg" alt=""></div>
-      <p style="font-size:18px;font-weight:700;margin:12px 0 4px" id="dpText"></p>
-      <div class="chips" id="dpChips"></div>
+      <div class="dots" id="dpDots"></div>
+      <div class="stepcard" id="dpCard"></div>
+      <div class="sofar" id="dpSoFar"><div class="sofar-h" id="dpSoFarH"></div><div class="chips" id="dpChips"></div></div>
+      <button class="teaser" id="dpTeaser"></button>
       <div class="row" style="justify-content:space-between;margin-top:8px">
         <button class="btn" id="dpPrev">◀ Back</button>
         <button class="btn primary" id="dpPlay">▶ Play</button>
@@ -1328,18 +1357,53 @@ function openSlides(d){
   for (let n=1;n<=d.stepCount;n++) getImg(imgKey(d.id,n));   // preload
   renderSlide(); window.scrollTo(0,0);
 }
-async function renderSlide(){
-  const d = dView.d, i = dView.i, st = d.steps[i];
-  $('dpCnt').textContent = `Step ${i+1} of ${d.stepCount}`;
-  $('dpText').textContent = st.text;
-  const added = d.steps.slice(0, i+1).flatMap(s=>s.adds), fresh = new Set(st.adds);
-  const role = n => (d.ingredients.find(x=>x.name===n)||{}).role;
-  $('dpChips').innerHTML = added.map(n=>`<span class="chip ${fresh.has(n)?'new':''} ${role(n)||''}">${esc(n)}${role(n)==='garnish'?' · garnish':role(n)==='sauce'?' · sauce':''}</span>`).join('');
-  $('dpPrev').disabled = i===0; $('dpNext').disabled = i===d.stepCount-1;
-  const img = $('dpImg'); img.style.opacity = .3;
-  const src = await getImg(imgKey(d.id, i+1));
-  if (dView.d===d && dView.i===i){ img.src = src||''; img.style.opacity = 1; }
+// Picks a fun icon for an ingredient name.
+function emojiFor(n){
+  const x = norm(n), map = [
+    ['garlic','🧄'],['chilli','🌶️'],['chili','🌶️'],['tomato','🍅'],['carrot','🥕'],['lime','🍋'],['lemon','🍋'],['peanut','🥜'],['cashew','🥜'],
+    ['dried shrimp','🦐'],['shrimp','🍤'],['prawn','🍤'],['ice','🧊'],['milk','🥛'],['tea','🍵'],['corn','🌽'],['cucumber','🥒'],['zucchini','🥒'],
+    ['chicken','🍗'],['beef','🥩'],['pork','🥓'],['egg','🥚'],['basil','🌿'],['leaves','🍃'],['leaf','🍃'],['sauce','🥣'],['dressing','🥣'],
+    ['papaya','🥗'],['beans','🫛'],['bean','🫛'],['rice','🍚'],['noodle','🍜'],['coconut','🥥'],['mango','🥭'],['onion','🧅'],['mushroom','🍄'],['seasoning','🧂'],['sugar','🍬']];
+  const hit = map.find(([k])=>x.includes(k)); return hit ? hit[1] : '✨';
 }
+async function renderSlide(){
+  const d = dView.d, i = dView.i, st = d.steps[i], n = d.stepCount, last = i===n-1;
+  const role = nm => (d.ingredients.find(x=>x.name===nm)||{}).role;
+  const roleTag = nm => role(nm)==='garnish' ? '<small class="garnish">Garnish</small>' : role(nm)==='sauce' ? '<small class="sauce">Sauce</small>' : '';
+  $('dpCnt').textContent = `Step ${i+1} of ${n}`;
+  $('dpDots').innerHTML = Array.from({length:n},(_,k)=>`<i class="${k<i?'done':k===i?'on':''}"></i>`).join('');
+  const card = $('dpCard');
+  if (i===0){
+    card.className = 'stepcard start';
+    card.innerHTML = `<div class="sc-badge">LET'S BUILD IT</div><div class="sc-big">${esc(d.vessel.name)}</div><div class="sc-text">${esc(st.text)}<br>${d.ingredients.length} items go into this ${d.category==='Drink'?'glass':'dish'}. Can you name them all?</div>`;
+  } else if (last && !st.adds.length){
+    card.className = 'stepcard final';
+    card.innerHTML = `<div class="sc-badge">🎉 READY TO SERVE</div><div class="sc-big">${esc(d.name)}</div><div class="sc-text">${esc(st.text)}</div>
+      <div class="recipe">${d.steps.flatMap(s=>s.adds).map((x,k)=>`<span><b>${k+1}</b>${emojiFor(x)} ${esc(x)}</span>`).join('')}</div>`;
+  } else {
+    card.className = 'stepcard';
+    card.innerHTML = `<div class="sc-badge">${last?'🎉 LAST STEP · READY TO SERVE':'STEP '+(i+1)+(st.adds.length?' · ADD':'')}</div>` +
+      (st.adds.length ? `<div class="sc-new">${st.adds.map(x=>`<span class="sc-pill"><span class="em">${emojiFor(x)}</span>${esc(x)}${roleTag(x)}</span>`).join('')}</div>` : `<div class="sc-big">👨‍🍳 Technique step</div>`) +
+      `<div class="sc-text">${esc(st.text)}</div>` +
+      (last ? `<div class="recipe">${d.steps.flatMap(s=>s.adds).map((x,k)=>`<span><b>${k+1}</b>${emojiFor(x)} ${esc(x)}</span>`).join('')}</div>` : '');
+    if (last) card.classList.add('final');
+  }
+  void card.offsetWidth; card.classList.add('pop');
+  const added = d.steps.slice(0, i+1).flatMap(s=>s.adds), fresh = new Set(st.adds);
+  $('dpSoFar').classList.toggle('hidden', !added.length || last);
+  $('dpSoFarH').textContent = `In the ${d.category==='Drink'?'glass':'bowl'} so far · ${added.length} of ${d.ingredients.length}`;
+  $('dpChips').innerHTML = added.map(x=>`<span class="chip ${fresh.has(x)?'new':''}">${emojiFor(x)} ${esc(x)}</span>`).join('');
+  // Curiosity teaser: make them guess before revealing the next item.
+  const nextAdds = !last ? d.steps.slice(i+1).find(s=>s.adds.length) : null;
+  const tz = $('dpTeaser');
+  tz.classList.toggle('hidden', last);
+  tz.textContent = nextAdds ? '🤔 Can you guess what goes in next? Tap to reveal' : '👀 Almost done... tap to see the final dish';
+  $('dpPrev').disabled = i===0; $('dpNext').disabled = last;
+  const img = $('dpImg'); img.classList.remove('kb'); img.style.opacity = .25;
+  const src = await getImg(imgKey(d.id, i+1));
+  if (dView.d===d && dView.i===i){ img.src = src||''; img.style.opacity = 1; void img.offsetWidth; img.classList.add('kb'); }
+}
+$('dpTeaser').onclick = ()=>{ stopSlides(); moveSlide(1); };
 function stopSlides(){ clearInterval(dView.timer); dView.timer=null; $('dpPlay').textContent='▶ Play'; }
 function moveSlide(k){ const n = dView.d.stepCount; dView.i = Math.max(0, Math.min(n-1, dView.i+k)); renderSlide(); }
 $('dpPrev').onclick = ()=>{ stopSlides(); moveSlide(-1); };
