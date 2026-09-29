@@ -135,8 +135,8 @@
   .plate img{max-width:100%;max-height:100%;object-fit:contain}
   .plate .tags{position:absolute;inset:auto 8px 8px 8px;display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
   .plate .tags span{background:rgba(255,255,255,.92);color:#1d232b;font-size:13px;font-weight:700;padding:4px 10px;border-radius:14px;animation:drop .4s ease-out}
+  .plate .tags span.new{background:var(--navy);color:#fff;box-shadow:0 0 0 3px rgba(31,78,120,.3)}
   .plate img.kb{animation:kb .7s ease-out}
-  .sofar .chip.new{animation:drop .4s ease-out}
   @keyframes drop{from{transform:translateY(-14px);opacity:0}to{transform:none;opacity:1}}
   .slide img.kb{animation:kb .7s ease-out}
   @keyframes kb{from{opacity:.2;transform:scale(1.07)}to{opacity:1;transform:none}}
@@ -1433,10 +1433,13 @@ function dishQuestion(i, q){
     } else {
       const matchOrder = (()=>{ const used=new Set(), order=[]; p.items.forEach(entry=>{ const m=ingredientMatch(d, entry, used); if(m){ used.add(m); order.push(m); } }); return order; })();
       const matched = new Set(matchOrder), stepIdx = bestStepIdx(d, matched), lastMatch = matchOrder[matchOrder.length-1];
+      // Matched ingredients render as pills stacked directly on top of the glass/bowl photo (the ".tags" layer
+      // already sits over the image), so it visually looks like the glass is filling up, one item at a time,
+      // in whatever order the trainee types them.
       html += `<p class="note">${kind==='glass'?'Glass':'Bowl'}: <b>${esc(p.vessel)}</b>. Now type each ingredient one at a time, including garnish and side sauce. Wrong items lose marks.</p>
-        <div class="plate"><img id="dxImg" class="kb" alt="${esc(d.name)} so far"><div class="tags">${p.items.map(t=>`<span>${esc(t)}</span>`).join('')}</div></div>
-        <div class="sofar"><div class="sofar-h">In the ${kind==='glass'?'glass':'bowl'} so far · ${matched.size} of ${d.ingredients.length}</div>
-          <div class="chips">${matchOrder.map(n=>`<span class="chip ${n===lastMatch?'new':'ok'}">${emojiFor(n)} ${esc(n)}</span>`).join('') || '<span class="note" style="margin:0">Nothing recognised yet</span>'}</div></div>
+        <div class="plate"><img id="dxImg" class="kb" alt="${esc(d.name)} so far">
+          <div class="tags">${matchOrder.map(n=>`<span class="${n===lastMatch?'new':''}">${emojiFor(n)} ${esc(n)}</span>`).join('') || ''}</div></div>
+        <p class="note" style="text-align:center;margin-top:-4px">${matched.size} of ${d.ingredients.length} recognised in the ${kind==='glass'?'glass':'bowl'}</p>
         <div class="row"><input class="ans grow" id="dxItem" placeholder="Type an ingredient" autocomplete="off" style="flex:1"><button class="btn primary" id="dxAdd">Add</button></div>
         <p class="note">${p.items.length} item${p.items.length===1?'':'s'} typed. Items can't be removed once added.</p>
         <div class="row" style="margin-top:10px"><button class="btn" id="dxDone" ${p.items.length?'':'disabled'}>Finish dish</button></div>`;
