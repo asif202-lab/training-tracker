@@ -1381,13 +1381,12 @@ function matchedSoFar(d, items){
 }
 // Only reveals the dish's true photographed build order, never skips ahead. If step 2's ingredient is typed
 // before step 1's, the picture stays put until step 1 is also matched — it never shows something not yet typed.
+// A real step photo shows a specific fixed real-life order — it can't be recombined to show an arbitrary
+// subset typed in an arbitrary order. So the photo itself just stays on the empty vessel, then reveals the
+// finished dish once every ingredient is in; the ingredient chips (below) are what actually build up live,
+// one at a time, in whatever order the trainee types them, with their own animation.
 function bestStepIdx(d, matchedNames){
-  let idx = 0;
-  for (let i=0;i<d.steps.length;i++){
-    const s = d.steps[i], satisfied = !s.adds.length || s.adds.every(a=>matchedNames.has(a));
-    if (satisfied) idx = i; else break;
-  }
-  return idx;
+  return matchedNames.size >= d.ingredients.length ? d.stepCount-1 : 0;
 }
 // Bowl/glass right = 1 mark. Each correct ingredient = 1 mark. Each wrong item = minus 1. Order does not matter. Never below 0.
 function dishScore(d, ans){
