@@ -133,6 +133,7 @@
   .chip.ok{background:var(--green-bg);color:var(--green)} .chip.no{background:var(--red-bg);color:var(--red);text-decoration:line-through} .chip.miss{background:#fff;border:1px dashed var(--red);color:var(--red)}
   .plate{position:relative;border-radius:14px;overflow:hidden;background:#1d232b;aspect-ratio:1;display:flex;align-items:center;justify-content:center;margin:8px 0}
   .plate img{max-width:100%;max-height:100%;object-fit:contain}
+  .plate .fill{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(180deg,rgba(31,78,120,.18),rgba(31,78,120,.55));border-top:2px solid rgba(255,255,255,.55);transition:height .6s cubic-bezier(.3,1.2,.35,1);pointer-events:none}
   .plate .tags{position:absolute;inset:auto 8px 8px 8px;display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
   .plate .tags span{background:rgba(255,255,255,.92);color:#1d232b;font-size:13px;font-weight:700;padding:4px 10px;border-radius:14px;animation:drop .4s ease-out}
   .plate .tags span.new{background:var(--navy);color:#fff;box-shadow:0 0 0 3px rgba(31,78,120,.3)}
@@ -1433,11 +1434,13 @@ function dishQuestion(i, q){
     } else {
       const matchOrder = (()=>{ const used=new Set(), order=[]; p.items.forEach(entry=>{ const m=ingredientMatch(d, entry, used); if(m){ used.add(m); order.push(m); } }); return order; })();
       const matched = new Set(matchOrder), stepIdx = bestStepIdx(d, matched), lastMatch = matchOrder[matchOrder.length-1];
-      // Matched ingredients render as pills stacked directly on top of the glass/bowl photo (the ".tags" layer
-      // already sits over the image), so it visually looks like the glass is filling up, one item at a time,
-      // in whatever order the trainee types them.
+      // Generic fill level — works for any dish, automatically, with no per-dish setup: a translucent layer
+      // rises inside the glass/bowl in proportion to how many ingredients are recognised so far (order-agnostic,
+      // driven purely by the count), plus a pill for each one so it's clear exactly what's been added.
+      const fillPct = d.ingredients.length ? Math.round((matched.size / d.ingredients.length) * 100) : 0;
       html += `<p class="note">${kind==='glass'?'Glass':'Bowl'}: <b>${esc(p.vessel)}</b>. Now type each ingredient one at a time, including garnish and side sauce. Wrong items lose marks.</p>
         <div class="plate"><img id="dxImg" class="kb" alt="${esc(d.name)} so far">
+          <div class="fill" style="height:${fillPct}%"></div>
           <div class="tags">${matchOrder.map(n=>`<span class="${n===lastMatch?'new':''}">${emojiFor(n)} ${esc(n)}</span>`).join('') || ''}</div></div>
         <p class="note" style="text-align:center;margin-top:-4px">${matched.size} of ${d.ingredients.length} recognised in the ${kind==='glass'?'glass':'bowl'}</p>
         <div class="row"><input class="ans grow" id="dxItem" placeholder="Type an ingredient" autocomplete="off" style="flex:1"><button class="btn primary" id="dxAdd">Add</button></div>
