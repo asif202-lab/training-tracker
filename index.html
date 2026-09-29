@@ -135,6 +135,8 @@
   .plate img{max-width:100%;max-height:100%;object-fit:contain}
   .plate .tags{position:absolute;inset:auto 8px 8px 8px;display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
   .plate .tags span{background:rgba(255,255,255,.92);color:#1d232b;font-size:13px;font-weight:700;padding:4px 10px;border-radius:14px;animation:drop .4s ease-out}
+  .plate img.kb{animation:kb .7s ease-out}
+  .sofar .chip.new{animation:drop .4s ease-out}
   @keyframes drop{from{transform:translateY(-14px);opacity:0}to{transform:none;opacity:1}}
   .slide img.kb{animation:kb .7s ease-out}
   @keyframes kb{from{opacity:.2;transform:scale(1.07)}to{opacity:1;transform:none}}
@@ -1377,9 +1379,14 @@ function matchedSoFar(d, items){
   items.forEach(entry=>{ const m = ingredientMatch(d, entry, used); if (m) used.add(m); });
   return used;
 }
+// Only reveals the dish's true photographed build order, never skips ahead. If step 2's ingredient is typed
+// before step 1's, the picture stays put until step 1 is also matched — it never shows something not yet typed.
 function bestStepIdx(d, matchedNames){
   let idx = 0;
-  d.steps.forEach((s,i)=>{ if (s.adds.some(a=>matchedNames.has(a))) idx = Math.max(idx, i); });
+  for (let i=0;i<d.steps.length;i++){
+    const s = d.steps[i], satisfied = !s.adds.length || s.adds.every(a=>matchedNames.has(a));
+    if (satisfied) idx = i; else break;
+  }
   return idx;
 }
 // Bowl/glass right = 1 mark. Each correct ingredient = 1 mark. Each wrong item = minus 1. Order does not matter. Never below 0.
@@ -1425,11 +1432,12 @@ function dishQuestion(i, q){
         <input class="ans" id="dxVessel" placeholder="Type the ${kind} name" autocomplete="off">
         <div class="row" style="margin-top:10px"><button class="btn primary" id="dxVesselGo">Continue</button></div>`;
     } else {
-      const matched = matchedSoFar(d, p.items), stepIdx = bestStepIdx(d, matched);
+      const matchOrder = (()=>{ const used=new Set(), order=[]; p.items.forEach(entry=>{ const m=ingredientMatch(d, entry, used); if(m){ used.add(m); order.push(m); } }); return order; })();
+      const matched = new Set(matchOrder), stepIdx = bestStepIdx(d, matched), lastMatch = matchOrder[matchOrder.length-1];
       html += `<p class="note">${kind==='glass'?'Glass':'Bowl'}: <b>${esc(p.vessel)}</b>. Now type each ingredient one at a time, including garnish and side sauce. Wrong items lose marks.</p>
-        <div class="plate"><img id="dxImg" alt="${esc(d.name)} so far"><div class="tags">${p.items.map(t=>`<span>${esc(t)}</span>`).join('')}</div></div>
+        <div class="plate"><img id="dxImg" class="kb" alt="${esc(d.name)} so far"><div class="tags">${p.items.map(t=>`<span>${esc(t)}</span>`).join('')}</div></div>
         <div class="sofar"><div class="sofar-h">In the ${kind==='glass'?'glass':'bowl'} so far · ${matched.size} of ${d.ingredients.length}</div>
-          <div class="chips">${[...matched].map(n=>`<span class="chip ok">${emojiFor(n)} ${esc(n)}</span>`).join('') || '<span class="note" style="margin:0">Nothing recognised yet</span>'}</div></div>
+          <div class="chips">${matchOrder.map(n=>`<span class="chip ${n===lastMatch?'new':'ok'}">${emojiFor(n)} ${esc(n)}</span>`).join('') || '<span class="note" style="margin:0">Nothing recognised yet</span>'}</div></div>
         <div class="row"><input class="ans grow" id="dxItem" placeholder="Type an ingredient" autocomplete="off" style="flex:1"><button class="btn primary" id="dxAdd">Add</button></div>
         <p class="note">${p.items.length} item${p.items.length===1?'':'s'} typed. Items can't be removed once added.</p>
         <div class="row" style="margin-top:10px"><button class="btn" id="dxDone" ${p.items.length?'':'disabled'}>Finish dish</button></div>`;
