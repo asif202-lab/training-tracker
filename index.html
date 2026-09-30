@@ -137,6 +137,7 @@
   .plate .tags{position:absolute;inset:auto 8px 8px 8px;display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
   .plate .tags span{background:rgba(255,255,255,.92);color:#1d232b;font-size:13px;font-weight:700;padding:4px 10px;border-radius:14px;animation:drop .4s ease-out}
   .plate .tags span.new{background:var(--navy);color:#fff;box-shadow:0 0 0 3px rgba(31,78,120,.3)}
+  .plate .tags span.bad{background:rgba(163,45,45,.92);color:#fff}
   .plate img.kb{animation:kb .7s ease-out}
   @keyframes drop{from{transform:translateY(-14px);opacity:0}to{transform:none;opacity:1}}
   .slide img.kb{animation:kb .7s ease-out}
@@ -661,7 +662,10 @@ function calc(t){
 /* ============ UI HELPERS ============ */
 const $ = id => document.getElementById(id);
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function show(view){ ['listView','formView','detailView','bankView','quizView'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); window.scrollTo(0,0); }
+let liveTimer = null;
+function stopLive(){ if (liveTimer){ clearInterval(liveTimer); liveTimer=null; } }
+function startLive(fn, ms=20000){ stopLive(); liveTimer = setInterval(fn, ms); }
+function show(view){ stopLive(); ['listView','formView','detailView','bankView','quizView'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); window.scrollTo(0,0); }
 function toast(msg){ const d=document.createElement('div'); d.className='toast'; d.textContent=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),2400); }
 function modal(html, sticky){
   const o=document.createElement('div'); o.className='overlay'; o.innerHTML=`<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
@@ -761,10 +765,15 @@ function renderPending(){
       mine.map(p=>`<div class="note" style="padding:4px 0"><b>${esc(p.name)}</b> · sent ${fmtDate(p.requestedAt.slice(0,10))}</div>`).join('');
   } else box.classList.add('hidden');
 }
+async function refreshOverviewLive(){
+  try{ await loadAll(); }catch(e){ return; }
+  if (!$('listView').classList.contains('hidden')) renderOverview();
+}
 function renderOverview(){
   $('whoAmI').textContent = level==='master'?'Master access':level==='management'?'Management access':outletName(myOutlet);
   $('backupBtn').classList.toggle('hidden', level!=='master');
   renderPending();
+  startLive(refreshOverviewLive, 20000); // keeps this report live without a manual reload
   const pool = visible().filter(t=>!t.archived);
   const all = pool.filter(t=>!t.completed).map(t=>({t,c:calc(t),brand:brandOf(t.outlet),desig:desigOf(t)}));
   const done = pool.filter(t=>t.completed);
@@ -1436,17 +1445,20 @@ function dishQuestion(i, q){
         <input class="ans" id="dxVessel" placeholder="Type the ${kind} name" autocomplete="off">
         <div class="row" style="margin-top:10px"><button class="btn primary" id="dxVesselGo">Continue</button></div>`;
     } else {
-      const matchOrder = (()=>{ const used=new Set(), order=[]; p.items.forEach(entry=>{ const m=ingredientMatch(d, entry, used); if(m){ used.add(m); order.push(m); } }); return order; })();
-      const matched = new Set(matchOrder), stepIdx = bestStepIdx(d, matched), lastMatch = matchOrder[matchOrder.length-1];
-      // Generic fill level — works for any dish, automatically, with no per-dish setup: a translucent layer
-      // rises inside the glass/bowl in proportion to how many ingredients are recognised so far (order-agnostic,
-      // driven purely by the count), plus a pill for each one so it's clear exactly what's been added.
+      // Every typed entry shows up, in the order typed — recognised ones as a normal pill, anything not
+      // recognised (a genuinely wrong ingredient, or a typo too far off) as a red pill, so it's visible
+      // immediately that it was registered and will cost a mark, not silently ignored.
+      const used = new Set();
+      const typedList = p.items.map((entry,idx)=>{ const m = ingredientMatch(d, entry, used); if (m) used.add(m); return { entry, name:m, isLast: idx===p.items.length-1 }; });
+      const matched = used, stepIdx = bestStepIdx(d, matched);
       const fillPct = d.ingredients.length ? Math.round((matched.size / d.ingredients.length) * 100) : 0;
       html += `<p class="note">${kind==='glass'?'Glass':'Bowl'}: <b>${esc(p.vessel)}</b>. Now type each ingredient one at a time, including garnish and side sauce. Wrong items lose marks.</p>
         <div class="plate"><img id="dxImg" class="kb" alt="${esc(d.name)} so far">
           <div class="fill" style="height:${fillPct}%"></div>
-          <div class="tags">${matchOrder.map(n=>`<span class="${n===lastMatch?'new':''}">${emojiFor(n)} ${esc(n)}</span>`).join('') || ''}</div></div>
-        <p class="note" style="text-align:center;margin-top:-4px">${matched.size} of ${d.ingredients.length} recognised in the ${kind==='glass'?'glass':'bowl'}</p>
+          <div class="tags">${typedList.map(x=> x.name
+            ? `<span class="${x.isLast?'new':''}">${emojiFor(x.name)} ${esc(x.name)}</span>`
+            : `<span class="bad">${esc(x.entry)} ✕</span>`).join('')}</div></div>
+        <p class="note" style="text-align:center;margin-top:-4px">${matched.size} of ${d.ingredients.length} recognised in the ${kind==='glass'?'glass':'bowl'}${typedList.length>matched.size?` · ${typedList.length-matched.size} not recognised`:''}</p>
         <div class="row"><input class="ans grow" id="dxItem" placeholder="Type an ingredient" autocomplete="off" style="flex:1"><button class="btn primary" id="dxAdd">Add</button></div>
         <p class="note">${p.items.length} item${p.items.length===1?'':'s'} typed. Items can't be removed once added.</p>
         <div class="row" style="margin-top:10px"><button class="btn" id="dxDone" ${p.items.length?'':'disabled'}>Finish dish</button></div>`;
@@ -1934,6 +1946,27 @@ async function openQuizAdmin(){
   const isMaster = level==='master';
   $('quizPoolInfo').textContent = (dishQuestions().length?`${dishQuestions().length} dish questions are created automatically from the Dish bank. `:'') + (qPool && qPool.questions.length ? `${qPool.questions.length} questions in the uploaded pool (${Math.floor(allQuestions().length/PER_DAY)} days of questions in total before any repeat).${isMaster?' Uploading a new file replaces the pool; scores are kept.':''}` : 'No uploaded question pool yet.');
   $('quizFile').disabled = !isMaster; $('quizSeason').classList.toggle('hidden', !isMaster); $('quizDelPool').classList.toggle('hidden', !isMaster || !qPool || !qPool.questions.length);
+  startLive(refreshQuizLive, 20000); // leaderboard and today's stats keep updating without a manual reload
+}
+// Lighter refresh for the quiz panel — updates the leaderboard and today's stats only, so it doesn't
+// disturb a pass-mark field or a file upload someone might be mid-way through on the rest of the screen.
+async function refreshQuizLive(){
+  if ($('quizView').classList.contains('hidden')) return;
+  try{ await loadQuiz(); }catch(e){ return; }
+  const rows = leaderboard(), today = todayStr();
+  const played = players.filter(p=>(p.days||{})[today] && p.days[today].length).length;
+  $('quizStats').textContent = `${players.length} staff joined · ${played} played today`;
+  $('quizLb').innerHTML = lbTable(rows, null);
+  const todayTally = {};
+  players.forEach(p=>{ ((p.days||{})[today]||[]).forEach(a=>{
+    const s = todayTally[a.q] = todayTally[a.q] || {right:0, total:0};
+    s.total++; if (a.ok) s.right++;
+  }); });
+  const askedToday = Object.keys(todayTally).map(Number);
+  $('quizToday').innerHTML = askedToday.length ? askedToday.map(qi=>{ const q = allQuestions()[qi], s = todayTally[qi];
+    return `<div class="rev"><b>${esc(q.q)}</b><div class="note" style="color:var(--green)">Answer: ${esc(q.options[q.answer])}</div>
+      <div class="note">${s.right} of ${s.total} answered correctly (${Math.round(s.right/s.total*100)}%)</div></div>`; }).join('')
+    : '<p class="note">No one has played today yet.</p>';
 }
 function validatePool(p){
   const list = Array.isArray(p) ? p : p && p.questions;
