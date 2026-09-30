@@ -363,7 +363,7 @@
         </div>
         <p class="note hidden" id="noBank">No online exams uploaded yet. Master access can upload them in the Exam bank tab.</p>
         <div class="tablewrap"><table>
-          <thead><tr><th>Exam</th><th>Attempts</th><th>Result</th></tr></thead>
+          <thead><tr><th>Exam</th><th>Attempts</th><th>Result</th><th></th></tr></thead>
           <tbody id="exams"></tbody>
         </table></div>
         <details style="margin-top:10px">
@@ -985,9 +985,13 @@ function renderDetail(){
   $('makeLink').disabled = locked || !active.length; $('onlineExam').disabled = locked || !active.length;
   const groups = examGroups(t); groups.forEach(g=>g.attempts.forEach(a=>a.tid=t.id));
   $('exams').innerHTML = groups.length ? groups.map(g=>`<tr><td>${esc(g.name)}</td><td>${attemptChips(g)}</td>
-      <td><span class="pill ${g.passed?'s-ok':'s-behind'}">${g.passed?'Passed':'Retake needed'}</span></td></tr>`).join('')
-    : `<tr><td colspan="3" class="note">No exams taken yet.</td></tr>`;
+      <td><span class="pill ${g.passed?'s-ok':'s-behind'}">${g.passed?'Passed':'Retake needed'}</span></td>
+      <td>${!g.passed && !locked ? `<button class="btn small primary" data-retake="${esc(g.name)}">Share retake link</button>` : ''}</td></tr>`).join('')
+    : `<tr><td colspan="4" class="note">No exams taken yet.</td></tr>`;
   bindChips($('exams'));
+  $('exams').querySelectorAll('[data-retake]').forEach(b=>b.onclick=()=>{
+    const ex = active.find(e=>e.title===b.dataset.retake); if (ex) createExamLink(ex);
+  });
   $('eName').innerHTML = [...new Set([...exams.map(e=>e.title), ...PAPER_EXAMS])].map(e=>`<option>${esc(e)}</option>`).join('');
   $('eDate').value = todayStr();
   ['eName','eDate','eScore','eTotal','eAdd'].forEach(id=>$(id).disabled = locked);
@@ -1078,8 +1082,7 @@ $('eAdd').onclick = async ()=>{
 };
 
 // Create a one-time exam link for this trainee
-$('makeLink').onclick = async ()=>{
-  const ex = examById($('onlineExam').value); if (!ex) return;
+async function createExamLink(ex){
   const g = examGroups(current).find(x=>x.name===ex.title);
   if (g && g.passed && !confirm(current.name+' already passed this exam. Create another attempt anyway?')) return;
   if (g && !g.passed){
@@ -1111,7 +1114,8 @@ $('makeLink').onclick = async ()=>{
     </div>`);
   m.querySelector('#mCopy').onclick = async ()=>{ try{ await navigator.clipboard.writeText(url); toast('Link copied'); }catch(e){ prompt('Copy this link:', url); } };
   m.querySelector('#mClose').onclick = ()=>m.remove();
-};
+}
+$('makeLink').onclick = ()=>{ const ex = examById($('onlineExam').value); if (ex) createExamLink(ex); };
 
 // View one attempt's answers; management can correct marks per question.
 function showAttempt(t, idx){
