@@ -524,7 +524,7 @@ async function loadOutlets(){
 const outletName = id => (outlets.find(o=>o.id===id)||{}).name || id;
 
 /* ============ AUTO MARKING ============ */
-const norm = s => String(s??'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9\u0600-\u06ff\s]/g,' ').replace(/\b(the|a|an)\b/g,' ').replace(/\s+/g,' ').trim();
+const norm = s => String(s??'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9\u0600-\u06ff\s]/g,' ').replace(/(\d)([a-z])/g,'$1 $2').replace(/([a-z])(\d)/g,'$1 $2').replace(/\b(the|a|an)\b/g,' ').replace(/\s+/g,' ').trim();
 // Edit distance that counts a swapped pair of letters ("bwol" / "bowl") as one mistake.
 function lev(a,b){
   const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
@@ -544,15 +544,30 @@ function closeEnough(x, v){
   if (/^\d+$/.test(nv)) return nx===nv;               // numbers must be exact
   return lev(x,v) <= allowed(nv.length) || lev(nx,nv) <= allowed(nv.length);
 }
-// True if the answer contains the accepted phrase, allowing spelling mistakes.
+// True if the answer's wording covers the accepted phrase's key words — any order, spelling mistakes
+// allowed per word, small connector words ("the", "with", "and"...) not required, and one content word may
+// be missing entirely on longer phrases (so "LBKK mix platter" still matches "LBKK Mixed Thai Platter").
+const MATCH_STOP = new Set(['the','a','an','and','with','of','in','on','for','to','is','are','it','at','as']);
+const stem = w => w.length>4 ? w.replace(/(ies)$/,'y').replace(/(es|ed|s)$/,'').replace(/ing$/,'') : w;
+const wordClose = (a,b) => a===b || stem(a)===stem(b) || closeEnough(a,b);
+const sigWords = s => s.split(' ').filter(w=>w && !MATCH_STOP.has(w));
 function matches(answer, accepted){
   const a = norm(answer), v = norm(accepted);
   if (!a || !v) return false;
-  if ((' '+a+' ').includes(' '+v+' ') || closeEnough(a, v)) return true;
-  const aw = a.split(' '), vw = v.split(' ');
-  for (let size=Math.max(1,vw.length-1); size<=vw.length+1; size++)
-    for (let i=0;i+size<=aw.length;i++) if (closeEnough(aw.slice(i,i+size).join(' '), v)) return true;
-  return false;
+  if (a===v) return true;
+  // "X or Y" in an item means either side is a complete correct answer on its own (e.g. a choice of
+  // protein) — not that both must be present.
+  if (/ or /.test(v)) return v.split(' or ').some(part => matches(answer, part.trim()));
+  const aw = sigWords(a), vw = sigWords(v);
+  if (!vw.length) return false;
+  if (vw.length===1) return aw.some(w=>wordClose(w, vw[0])) || closeEnough(a, v);
+  const usedA = new Set(); let hit = 0;
+  vw.forEach(vWord=>{
+    const idx = aw.findIndex((aWord,i)=>!usedA.has(i) && wordClose(aWord, vWord));
+    if (idx>=0){ usedA.add(idx); hit++; }
+  });
+  const need = vw.length<=3 ? vw.length : vw.length-1;
+  return hit >= need;
 }
 const variants = x => Array.isArray(x) ? x : [x];
 function scoreQuestion(q, ans){
@@ -564,12 +579,10 @@ function scoreQuestion(q, ans){
   if (q.type==='manual') return 0; // never auto-scored — a human awards these marks in the review queue
   if (q.type==='list'){
     const boxes = (Array.isArray(ans) ? ans : String(ans).split(/\n|,/)).map(b=>b.trim()).filter(Boolean);
-    // Each answer box can count for one item only, and each item only once.
-    const usedBox = new Set(); let hit = 0;
-    q.items.forEach(item=>{
-      const bi = boxes.findIndex((b,i)=>!usedBox.has(i) && variants(item).some(v=>matches(b, v)));
-      if (bi>=0){ usedBox.add(bi); hit++; }
-    });
+    // All boxes are read together as one answer — which box a fact was written in doesn't matter, so
+    // writing two or three facts crammed into a single box still gets credit for each of them.
+    const pooled = boxes.join(' . ');
+    const hit = q.items.filter(item => variants(item).some(v=>matches(pooled, v))).length;
     const need = q.need || q.items.length;
     return Math.round(Math.min(hit, need) / need * pts * 100) / 100;
   }
@@ -590,6 +603,7 @@ function correctText(q){
   if (q.type==='truefalse') return String(q.answer)==='true'?'True':'False';
   if (q.type==='text') return variants(q.answers).join(' / ');
   if (q.type==='list') return q.items.map(i=>variants(i)[0]).join(', ') + (q.need?` (any ${q.need})`:'');
+  if (q.type==='manual') return q.modelAnswer || '(marked by a person, not auto-checked)';
   return '';
 }
 function validateExam(ex){
@@ -808,30 +822,35 @@ function renderExamReview(){
       if (!e) return;
       const ex = examById(e.examId);
       const manualQs = ex ? ex.questions.map((q,i)=>({q,i})).filter(x=>x.q.type==='manual') : [];
-      let manualTotal = 0, bad = false;
+      const marks = {}; let manualTotal = 0, bad = false;
       manualQs.forEach(({q,i})=>{
         const inp = card.querySelector(`[data-mark="${i}"]`);
         const v = inp.value==='' ? NaN : +inp.value;
         if (!(v>=0 && v<=(q.points||1))){ bad = true; inp.style.borderColor = 'var(--red)'; }
-        else { manualTotal += v; inp.style.borderColor = ''; }
+        else { marks[i] = v; manualTotal += v; inp.style.borderColor = ''; }
       });
       if (bad) return toast('Enter a mark for each question, within its max.');
       card.querySelector('[data-submitreview]').disabled = true;
       try{
         const updated = await saveTrainee(tid, tt=>{
           const entry = (tt.exams||[]).find(x=>x.token===e.token);
-          if (entry){ entry.score = Math.round((entry.score + manualTotal)*100)/100; entry.pending = false; }
+          if (entry){
+            Object.entries(marks).forEach(([i,v])=>{ if (entry.detail && entry.detail[i]) entry.detail[i].pts = v; });
+            entry.score = Math.round((entry.score + manualTotal)*100)/100; entry.pending = false;
+          }
         });
         const saved = updated.exams.find(x=>x.token===e.token);
         if (saved){
+          // Also updates the trainee's own link so they can review/download their result and see the
+          // marked manual answers, not just score/total.
           try{
             const linkRaw = await kvGet(LINK_PREFIX+e.token, true);
             if (linkRaw){
               const link = JSON.parse(linkRaw);
-              link.status = 'done'; link.result = { score:saved.score, total:saved.total, passMark:(ex && ex.passMark)||85 };
+              link.status = 'done'; link.result = { score:saved.score, total:saved.total, passMark:(ex && ex.passMark)||85, detail:saved.detail };
               await kvSet(LINK_PREFIX+e.token, JSON.stringify(link));
             }
-          }catch(err){} // the trainee's own detail record is a nice-to-have, not essential — the record on the trainee is the real one
+          }catch(err){}
         }
         toast('Marks recorded'); renderOverview();
       }catch(err){ toast('Could not save. Check your internet.'); card.querySelector('[data-submitreview]').disabled=false; }
@@ -1299,18 +1318,22 @@ async function runExam(token){
     const raw = await kvGet(LINK_PREFIX+token, true);
     if (!raw){ box.innerHTML = '<h2>This exam link is not valid</h2><p class="note">Check the link with your buddy or OIC.</p>'; return; }
     X = JSON.parse(raw);
+    // Load the question paper whenever possible — including for an already-finished attempt, so the
+    // trainee can review their answers or download a PDF. If this fails, the score still shows; review
+    // and PDF just won't be offered for that attempt.
+    try{
+      if (String(X.examId).startsWith('dish:')){
+        const dRaw = await kvGet(DISH_PREFIX+X.examId.slice(5));
+        if (dRaw && !dec(dRaw).deleted) XEX = dishExam(dec(dRaw));
+      } else {
+        const exRaw = await kvGet(EXAM_PREFIX+X.examId);
+        if (exRaw && !dec(exRaw).deleted) XEX = dec(exRaw);
+      }
+    }catch(e){}
     if (X.status==='review'){ return showPending(); }
     if (X.status==='done'){ return showResult(X.result.score, X.result.total, X.result.passMark, true); }
     if (Date.now() > X.expires){ box.innerHTML = '<h2>This exam link has expired</h2><p class="note">Ask your buddy or OIC for a new link.</p>'; return; }
-    if (String(X.examId).startsWith('dish:')){
-      const dRaw = await kvGet(DISH_PREFIX+X.examId.slice(5));
-      if (!dRaw || dec(dRaw).deleted){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
-      XEX = dishExam(dec(dRaw));
-    }
-    const exRaw = XEX ? 'x' : await kvGet(EXAM_PREFIX+X.examId);
-    if (!exRaw){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
-    if (!XEX) XEX = dec(exRaw);
-    if (XEX.deleted){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
+    if (!XEX){ box.innerHTML = '<h2>This exam is no longer available</h2><p class="note">Ask your buddy or OIC for help.</p>'; return; }
   }catch(e){ box.innerHTML = '<h2>Could not load the exam</h2><p class="note">Check your internet and refresh the page.</p>'; return; }
   const answered = Object.keys(X.answers).length + (X.partial ? 1 : 0);
   if (answered===0){
@@ -1405,7 +1428,7 @@ async function finishExam(timeUp){
         t.exams.push({ name:XEX.title, examId:XEX.id, date:todayStr(), score:autoScore, total, auto:true, token:X.token, detail, by:'Online exam', pending:hasManual });
     });
     X.status = hasManual ? 'review' : 'done';
-    X.result = hasManual ? null : {score:autoScore, total, passMark};
+    X.result = hasManual ? null : {score:autoScore, total, passMark, detail};
     X.finished=new Date().toISOString();
     await kvSet(LINK_PREFIX+X.token, JSON.stringify(X));
     if (hasManual) showPending(); else showResult(autoScore, total, passMark, false);
@@ -1416,13 +1439,52 @@ async function finishExam(timeUp){
 }
 function showResult(score, total, passMark, again){
   const p = score/total, pass = p*100 >= passMark;
+  // Only offer the review/PDF when we actually have the question paper and a per-question breakdown —
+  // both are loaded by runExam() whenever possible, but degrade gracefully if the paper was deleted.
+  const canReview = !!(XEX && XEX.questions && X.result && X.result.detail);
   $('examBox').innerHTML = `
     <div class="result ${pass?'pass':'fail'}" role="status">
       <div class="big">${fmtPct(p)}</div>
       <div class="word">${pass?'Passed':'Not passed'}</div>
       <p>${score} of ${total} marks · pass mark ${passMark}%</p>
     </div>
-    <p class="note" style="text-align:center;margin-top:12px">${again?'This exam has already been completed. ':''}${pass?'Well done. Your result has been sent to your buddy and manager.':'Your result has been sent to your buddy. They will arrange a retake after more practice.'}</p>`;
+    <p class="note" style="text-align:center;margin-top:12px">${again?'This exam has already been completed. ':''}${pass?'Well done. Your result has been sent to your buddy and manager.':'Your result has been sent to your buddy. They will arrange a retake after more practice.'}</p>
+    ${canReview?`<div class="row" style="justify-content:center;margin-top:12px;flex-wrap:wrap"><button class="btn" id="xReviewBtn">Review my answers</button><button class="btn" id="xPdfBtn">Download as PDF</button></div><div id="xReviewBox"></div>`:''}`;
+  if (canReview){
+    $('xReviewBtn').onclick = ()=>{ $('xReviewBtn').remove(); renderExamReviewForTrainee($('xReviewBox')); };
+    $('xPdfBtn').onclick = ()=>printExamReview(pass, p);
+  }
+}
+// The trainee's own read-only review: what they wrote, right or wrong, and the correct answer for every
+// question — so a wrong mark is visible and explainable right away instead of becoming a dispute later.
+function renderExamReviewForTrainee(container){
+  container.innerHTML = XEX.questions.map((q,i)=>{
+    const d = (X.result.detail||[])[i] || {}, max = +q.points||1, ok = (d.pts??0) >= max;
+    return `<div class="rev"><b>Q${i+1}. ${esc(q.q)}</b> <span class="note">(${d.pts??0} / ${max} marks)</span>
+      ${q.type==='dish' ? dishReview(q.dish, d.a) : `<div class="ta ${ok?'ok':'no'}">${esc(answerText(q, d.a))}</div>`}
+      <div class="note">Correct answer: ${esc(correctText(q))}</div></div>`;
+  }).join('');
+}
+// Browser's native print-to-PDF, same pattern already used for the training record — no extra library.
+function printExamReview(pass, p){
+  const rows = XEX.questions.map((q,i)=>{
+    const d = (X.result.detail||[])[i] || {}, max = +q.points||1;
+    return `<tr><td>${i+1}. ${esc(q.q)}</td><td style="white-space:pre-wrap">${esc(answerText(q, d.a))}</td><td style="white-space:pre-wrap">${esc(correctText(q))}</td><td>${d.pts??0} / ${max}</td></tr>`;
+  }).join('');
+  const w = window.open('', '_blank');
+  if (!w){ toast('Allow pop-ups to download the PDF'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(XEX.title)} - ${esc(X.traineeName||'')}</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:24px}h1{font-size:18px;margin:0 0 4px}
+  table{border-collapse:collapse;width:100%}td,th{border:1px solid #bbb;padding:4px 6px;vertical-align:top}th{text-align:left}
+  .result{padding:10px 14px;border-radius:8px;margin:12px 0;font-weight:700}.pass{background:#e6f4ec;color:#2e7d4f}.fail{background:#fbe7e7;color:#a32d2d}
+  @media print{button{display:none}}</style></head><body>
+  <button onclick="print()" style="float:right;padding:6px 14px">Print / Save as PDF</button>
+  <h1>${esc(XEX.title)}</h1>
+  <p><b>Trainee:</b> ${esc(X.traineeName||'-')} &nbsp; <b>Date:</b> ${fmtDate(todayStr())}</p>
+  <div class="result ${pass?'pass':'fail'}">${X.result.score} / ${X.result.total} marks (${fmtPct(p)}) — ${pass?'Passed':'Not passed'} · pass mark ${X.result.passMark}%</div>
+  <table><tr><th>Question</th><th>Your answer</th><th>Correct answer</th><th>Marks</th></tr>${rows}</table>
+  </body></html>`);
+  w.document.close();
 }
 // Some answers still need a human to mark them — no score or pass/fail is shown until that happens.
 function showPending(){
