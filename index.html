@@ -270,6 +270,7 @@
         </div>
         <p class="note" style="margin:0 0 10px"><span id="whoAmI"></span> · <a href="#" id="logout">Log out</a></p>
         <div class="card hidden" id="pendingBox" style="border-left:4px solid var(--navy);margin-bottom:10px"></div>
+        <div class="card hidden" id="examReviewBox" style="border-left:4px solid var(--amber);margin-bottom:10px"></div>
         <div class="alerts" id="alerts"></div>
         <div class="sgrid" id="desigBoxes"></div>
         <div class="bgrid" id="brandBoxes"></div>
@@ -560,6 +561,7 @@ function scoreQuestion(q, ans){
   if (q.type==='mcq' || q.type==='truefalse') return String(ans)===String(q.answer) ? pts : 0;
   if (q.type==='text') return variants(q.answers).some(v=>matches(ans, v)) ? pts : 0;
   if (q.type==='dish') return dishScore(q.dish, ans).score;
+  if (q.type==='manual') return 0; // never auto-scored — a human awards these marks in the review queue
   if (q.type==='list'){
     const boxes = (Array.isArray(ans) ? ans : String(ans).split(/\n|,/)).map(b=>b.trim()).filter(Boolean);
     // Each answer box can count for one item only, and each item only once.
@@ -597,11 +599,12 @@ function validateExam(ex){
   for (let i=0;i<ex.questions.length;i++){
     const q = ex.questions[i], n = 'Question '+(i+1);
     if (!q.q) return n+' has no question text.';
-    if (!['mcq','truefalse','text','list'].includes(q.type)) return n+' has an unknown type "'+q.type+'". Use mcq, truefalse, text or list.';
+    if (!['mcq','truefalse','text','list','manual'].includes(q.type)) return n+' has an unknown type "'+q.type+'". Use mcq, truefalse, text, list or manual.';
     if (q.type==='mcq' && (!Array.isArray(q.options) || q.answer===undefined || !q.options[q.answer])) return n+' needs "options" and the index of the correct "answer".';
     if (q.type==='truefalse' && typeof q.answer!=='boolean') return n+' needs "answer": true or false.';
     if (q.type==='text' && !q.answers) return n+' needs accepted "answers".';
     if (q.type==='list' && (!Array.isArray(q.items) || !q.items.length)) return n+' needs a list of "items".';
+    // "manual" needs no answer key at all — a human marks it after the trainee submits (see finishExam).
   }
   return null;
 }
@@ -629,12 +632,12 @@ function examGroups(t){
   return Object.entries(g).map(([name, attempts])=>{
     attempts.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || a.idx-b.idx);
     const last = attempts[attempts.length-1];
-    return { name, attempts, passed: isPass(last) };
+    return { name, attempts, pending: !!last.pending, passed: last.pending ? false : isPass(last) };
   });
 }
 function examSummary(t){
   const g = examGroups(t);
-  return { count:g.length, passed:g.filter(x=>x.passed).length, failed:g.filter(x=>!x.passed).length };
+  return { count:g.length, passed:g.filter(x=>x.passed).length, failed:g.filter(x=>!x.passed && !x.pending).length, pending:g.filter(x=>x.pending).length };
 }
 function calc(t){
   const items = ITEMS[t.program], done = t.topics||{};
@@ -650,11 +653,12 @@ function calc(t){
   if (t.archived){ status='Archived'; cls='s-done'; }
   else if (t.completed){ status='Completed'; cls='s-done'; }
   else if (day < 1){ status='Starts '+fmtDate(t.start); cls='s-wait'; }
-  else if (allDone && ex.count>0 && ex.failed===0){ status='Ready for sign-off'; cls='s-ready'; }
+  else if (allDone && ex.count>0 && ex.failed===0 && ex.pending===0){ status='Ready for sign-off'; cls='s-ready'; }
   else if (t.program==='NJ' && day > NJ.days && day <= NJ.extDays){ status='Extension (day '+day+')'; cls='s-ext'; }
   else if (day > (t.program==='NJ'?NJ.extDays:90)){ status='Overdue'; cls='s-behind'; }
   else if (late.length){ status=late.length+' topic'+(late.length>1?'s':'')+' behind'; cls='s-behind'; }
   else if (ex.failed){ status='Retake needed'; cls='s-behind'; }
+  else if (ex.pending){ status='Exam awaiting review'; cls='s-wait'; }
   else { status='On track'; cls='s-ok'; }
   return { day, doneCount, total:items.length, pct: doneCount/items.length, expected, targetDate, late, ex, status, cls, allDone };
 }
@@ -693,6 +697,7 @@ function brandOf(outletId){
 }
 function attemptChips(group){
   return group.attempts.map((a,i)=>{
+    if (a.pending) return `<button class="att" data-tid="${esc(a.tid||'')}" data-idx="${a.idx}" style="background:var(--amber-bg);color:var(--amber)" title="Attempt ${i+1} — awaiting review">Pending<small>#${i+1} · ${fmtShort(a.date)}</small></button>`;
     const p = pctOf(a), cls = isPass(a)?'pass':'fail';
     return `<button class="att ${cls}" data-tid="${esc(a.tid||'')}" data-idx="${a.idx}" title="Attempt ${i+1}${a.auto?' (online)':' (paper)'}">${fmtPct(p)}<small>#${i+1} · ${fmtShort(a.date)}${a.auto?'':' · paper'}</small></button>`;
   }).join('');
@@ -769,10 +774,75 @@ async function refreshOverviewLive(){
   try{ await loadAll(); }catch(e){ return; }
   if (!$('listView').classList.contains('hidden')) renderOverview();
 }
+// Any question typed "manual" never gets an auto score. The trainee's result stays hidden until master
+// enters marks for every manual question here — this is the only place that happens.
+function renderExamReview(){
+  const box = $('examReviewBox');
+  // Visible to whoever can see the trainee — master/management see every outlet, an outlet login sees only
+  // its own trainees, same as the rest of the app. The buddy/trainer who actually knows the trainee's work
+  // is usually at the outlet, not master, so they need to be able to clear these, not just master.
+  const items = [];
+  visible().forEach(t=>(t.exams||[]).forEach((e,idx)=>{ if (e.pending) items.push({t, e, idx}); }));
+  box.classList.toggle('hidden', !items.length);
+  if (!items.length) return;
+  box.innerHTML = `<h2 style="margin:0 0 8px">Exams awaiting review (${items.length})</h2>
+    <p class="note" style="margin-top:0">The trainee does not see a score or pass/fail result until you submit marks here.</p>` +
+    items.map(({t,e,idx})=>{
+      const ex = examById(e.examId);
+      const manualQs = ex ? ex.questions.map((q,i)=>({q,i})).filter(x=>x.q.type==='manual') : [];
+      return `<div class="rev" data-review="${esc(t.id)}:${idx}" style="border-top:1px solid var(--line);padding:10px 0">
+        <b>${esc(t.name)}</b> · ${esc(e.name)} <span class="note">(${fmtDate(e.date)})</span>
+        ${manualQs.length ? manualQs.map(({q,i})=>`<div style="margin-top:8px">
+          <p class="note" style="margin:0 0 2px"><b>${esc(q.q)}</b> (${q.points||1} mark${(q.points||1)>1?'s':''})</p>
+          <p class="note" style="margin:0 0 4px;white-space:pre-wrap;background:#f7f9fb;border:1px solid var(--line);border-radius:8px;padding:6px 8px"><b>Trainee wrote:</b> ${esc((e.detail && e.detail[i] && e.detail[i].a) || '(no answer given)')}</p>
+          ${q.modelAnswer ? `<p class="note" style="margin:0 0 4px;color:var(--green)"><b>Model answer:</b> ${esc(q.modelAnswer)}</p>` : ''}
+          <input type="number" class="ans" data-mark="${i}" min="0" max="${q.points||1}" style="width:90px" placeholder="0 to ${q.points||1}">
+        </div>`).join('') : '<p class="note">This exam no longer has any manual questions — submit with no marks to clear it.</p>'}
+        <div class="row" style="margin-top:8px"><button class="btn small primary" data-submitreview>Submit marks</button></div>
+      </div>`;
+    }).join('');
+  box.querySelectorAll('[data-review]').forEach(card=>{
+    const [tid, idxStr] = card.dataset.review.split(':'), idx = +idxStr;
+    card.querySelector('[data-submitreview]').onclick = async ()=>{
+      const t = trainees.find(x=>x.id===tid); const e = t && t.exams && t.exams[idx];
+      if (!e) return;
+      const ex = examById(e.examId);
+      const manualQs = ex ? ex.questions.map((q,i)=>({q,i})).filter(x=>x.q.type==='manual') : [];
+      let manualTotal = 0, bad = false;
+      manualQs.forEach(({q,i})=>{
+        const inp = card.querySelector(`[data-mark="${i}"]`);
+        const v = inp.value==='' ? NaN : +inp.value;
+        if (!(v>=0 && v<=(q.points||1))){ bad = true; inp.style.borderColor = 'var(--red)'; }
+        else { manualTotal += v; inp.style.borderColor = ''; }
+      });
+      if (bad) return toast('Enter a mark for each question, within its max.');
+      card.querySelector('[data-submitreview]').disabled = true;
+      try{
+        const updated = await saveTrainee(tid, tt=>{
+          const entry = (tt.exams||[]).find(x=>x.token===e.token);
+          if (entry){ entry.score = Math.round((entry.score + manualTotal)*100)/100; entry.pending = false; }
+        });
+        const saved = updated.exams.find(x=>x.token===e.token);
+        if (saved){
+          try{
+            const linkRaw = await kvGet(LINK_PREFIX+e.token, true);
+            if (linkRaw){
+              const link = JSON.parse(linkRaw);
+              link.status = 'done'; link.result = { score:saved.score, total:saved.total, passMark:(ex && ex.passMark)||85 };
+              await kvSet(LINK_PREFIX+e.token, JSON.stringify(link));
+            }
+          }catch(err){} // the trainee's own detail record is a nice-to-have, not essential — the record on the trainee is the real one
+        }
+        toast('Marks recorded'); renderOverview();
+      }catch(err){ toast('Could not save. Check your internet.'); card.querySelector('[data-submitreview]').disabled=false; }
+    };
+  });
+}
 function renderOverview(){
   $('whoAmI').textContent = level==='master'?'Master access':level==='management'?'Management access':outletName(myOutlet);
   $('backupBtn').classList.toggle('hidden', level!=='master');
   renderPending();
+  renderExamReview();
   startLive(refreshOverviewLive, 20000); // keeps this report live without a manual reload
   const pool = visible().filter(t=>!t.archived);
   const all = pool.filter(t=>!t.completed).map(t=>({t,c:calc(t),brand:brandOf(t.outlet),desig:desigOf(t)}));
@@ -994,8 +1064,8 @@ function renderDetail(){
   $('makeLink').disabled = locked || !active.length; $('onlineExam').disabled = locked || !active.length;
   const groups = examGroups(t); groups.forEach(g=>g.attempts.forEach(a=>a.tid=t.id));
   $('exams').innerHTML = groups.length ? groups.map(g=>`<tr><td>${esc(g.name)}</td><td>${attemptChips(g)}</td>
-      <td><span class="pill ${g.passed?'s-ok':'s-behind'}">${g.passed?'Passed':'Retake needed'}</span></td>
-      <td>${!g.passed && !locked ? `<button class="btn small primary" data-retake="${esc(g.name)}">Share retake link</button>` : ''}</td></tr>`).join('')
+      <td><span class="pill ${g.pending?'s-wait':g.passed?'s-ok':'s-behind'}">${g.pending?'Awaiting review':g.passed?'Passed':'Retake needed'}</span></td>
+      <td>${!g.pending && !g.passed && !locked ? `<button class="btn small primary" data-retake="${esc(g.name)}">Share retake link</button>` : ''}</td></tr>`).join('')
     : `<tr><td colspan="4" class="note">No exams taken yet.</td></tr>`;
   bindChips($('exams'));
   $('exams').querySelectorAll('[data-retake]').forEach(b=>b.onclick=()=>{
@@ -1229,6 +1299,7 @@ async function runExam(token){
     const raw = await kvGet(LINK_PREFIX+token, true);
     if (!raw){ box.innerHTML = '<h2>This exam link is not valid</h2><p class="note">Check the link with your buddy or OIC.</p>'; return; }
     X = JSON.parse(raw);
+    if (X.status==='review'){ return showPending(); }
     if (X.status==='done'){ return showResult(X.result.score, X.result.total, X.result.passMark, true); }
     if (Date.now() > X.expires){ box.innerHTML = '<h2>This exam link has expired</h2><p class="note">Ask your buddy or OIC for a new link.</p>'; return; }
     if (String(X.examId).startsWith('dish:')){
@@ -1247,6 +1318,7 @@ async function runExam(token){
       <p>Hello <b>${esc(X.traineeName)}</b>.</p>
       <p>${XEX.questions[0].type==='dish'?'Dish exam':XEX.questions.length+' questions'} · ${totalPoints(XEX)} marks · pass mark ${XEX.passMark||85}%${XEX.timeLimit?' · time limit '+XEX.timeLimit+' minutes':''}</p>
       ${XEX.questions[0].type==='dish'?'<p class="note">First type the bowl or glass it is served in. Then type every ingredient one at a time, including garnish and side sauce. Order does not matter. Each correct item earns a mark; each wrong item loses a mark.</p>':''}
+      ${XEX.questions.some(q=>q.type==='manual')?'<p class="note">Part of this exam is marked by a person, not automatically. Your result will not be shown right away — you\'ll find out once that review is done.</p>':''}
       ${XEX.timeLimit?'<p class="note">The timer starts when you press Start. When time is up, the exam finishes automatically and unanswered questions get 0.</p>':''}
       <p class="note">Questions come one at a time. Once you submit an answer, it is locked and you cannot go back. Your result shows at the end.</p>
       <button class="btn primary" id="xStart">Start exam</button>`;
@@ -1308,6 +1380,7 @@ function showQuestion(){
     try{
       const raw = await kvGet(LINK_PREFIX+X.token, true);   // latest version, so answers can never be overwritten
       const fresh = JSON.parse(raw);
+      if (fresh.status==='review'){ X=fresh; return showPending(); }
       if (fresh.status==='done'){ X=fresh; return showResult(X.result.score, X.result.total, X.result.passMark, true); }
       if (!(i in fresh.answers)) fresh.answers[i] = empty ? '' : ans;
       await kvSet(LINK_PREFIX+X.token, JSON.stringify(fresh));
@@ -1321,16 +1394,21 @@ async function finishExam(timeUp){
   if (timeUp){ try{ X = JSON.parse(await kvGet(LINK_PREFIX+X.token, true)); }catch(e){} }
   const ansOf = i => (i in X.answers) ? X.answers[i] : (X.partial && X.partial[i]);   // time-up: keep what was typed
   const detail = XEX.questions.map((q,i)=>({ a:ansOf(i), pts: scoreQuestion(q, ansOf(i)) }));
-  const score = Math.round(detail.reduce((s,d)=>s+d.pts,0)*100)/100, total = totalPoints(XEX), passMark = XEX.passMark||85;
+  // Questions marked "manual" are never auto-scored. If the exam has any, the result is held back — not even
+  // the partial auto-score is shown to the trainee — until a master reviews those questions and awards marks.
+  const hasManual = XEX.questions.some(q=>q.type==='manual');
+  const autoScore = Math.round(detail.reduce((s,d)=>s+d.pts,0)*100)/100, total = totalPoints(XEX), passMark = XEX.passMark||85;
   try{
     await saveTrainee(X.traineeId, t=>{
       t.exams = t.exams||[];
       if (!t.exams.some(e=>e.token===X.token))
-        t.exams.push({ name:XEX.title, examId:XEX.id, date:todayStr(), score, total, auto:true, token:X.token, detail, by:'Online exam' });
+        t.exams.push({ name:XEX.title, examId:XEX.id, date:todayStr(), score:autoScore, total, auto:true, token:X.token, detail, by:'Online exam', pending:hasManual });
     });
-    X.status='done'; X.result={score,total,passMark}; X.finished=new Date().toISOString();
+    X.status = hasManual ? 'review' : 'done';
+    X.result = hasManual ? null : {score:autoScore, total, passMark};
+    X.finished=new Date().toISOString();
     await kvSet(LINK_PREFIX+X.token, JSON.stringify(X));
-    showResult(score, total, passMark, false);
+    if (hasManual) showPending(); else showResult(autoScore, total, passMark, false);
   }catch(e){
     finishing = false;
     box.innerHTML = '<h2>Your answers are saved, but the result could not be recorded</h2><p class="note">Check your internet, then refresh this page to finish.</p>';
@@ -1345,6 +1423,15 @@ function showResult(score, total, passMark, again){
       <p>${score} of ${total} marks · pass mark ${passMark}%</p>
     </div>
     <p class="note" style="text-align:center;margin-top:12px">${again?'This exam has already been completed. ':''}${pass?'Well done. Your result has been sent to your buddy and manager.':'Your result has been sent to your buddy. They will arrange a retake after more practice.'}</p>`;
+}
+// Some answers still need a human to mark them — no score or pass/fail is shown until that happens.
+function showPending(){
+  $('examBox').innerHTML = `
+    <div class="result" role="status" style="background:var(--blue-bg);color:var(--navy)">
+      <div class="word">Submitted</div>
+      <p>Some of your answers need to be checked by your trainer before your result is ready.</p>
+    </div>
+    <p class="note" style="text-align:center;margin-top:12px">You'll find out your pass/fail result once that review is done. No action needed from you right now.</p>`;
 }
 
 /* ============ DISHES ============ */
