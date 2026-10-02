@@ -1871,6 +1871,30 @@ function mcq(q, right, wrongs, rnd, extra){
   const opts = shuffleSeeded([right, ...wrongs.slice(0,3)], rnd);
   return { q, options:opts, answer:opts.indexOf(right), ...extra };
 }
+// Pulls daily-quiz MCQs straight out of every uploaded exam — mcq and true/false questions are used as-is;
+// a text question becomes an MCQ using other short answers from the same exam as the wrong options, so
+// nothing needs to be authored twice. List and manual questions aren't suited to a quick multiple-choice
+// quiz, so those are left for the exam itself.
+function examQuestions(){
+  const out = [];
+  exams.filter(ex=>ex.active!==false).forEach(ex=>{
+    const rnd = seeded(hashStr(ex.id));
+    const textAnswers = [...new Set(ex.questions.filter(q=>q.type==='text' && Array.isArray(q.answers) && q.answers.length).map(q=>variants(q.answers)[0]))];
+    ex.questions.forEach(q=>{
+      if (q.type==='mcq' && Array.isArray(q.options) && q.answer!==undefined && q.options[q.answer]){
+        out.push({ q:q.q, options:q.options, answer:q.answer, explain:q.explain });
+      } else if (q.type==='truefalse' && typeof q.answer==='boolean'){
+        const opts = shuffleSeeded(['True','False'], rnd), right = q.answer?'True':'False';
+        out.push({ q:q.q, options:opts, answer:opts.indexOf(right), explain:q.explain });
+      } else if (q.type==='text' && Array.isArray(q.answers) && q.answers.length){
+        const right = variants(q.answers)[0];
+        const wrongs = shuffleSeeded(textAnswers.filter(a=>norm(a)!==norm(right)), rnd).slice(0,3);
+        if (wrongs.length>=2) out.push(mcq(q.q, right, wrongs, rnd, { explain:q.explain }));
+      }
+    });
+  });
+  return out;
+}
 function dishQuestions(){
   const list = dishes.filter(d=>d.active!==false), out = [];
   const allIng = [...new Set(list.flatMap(d=>d.ingredients.map(i=>i.name)))];
@@ -1907,7 +1931,7 @@ async function loadQuiz(){
 function seeded(seed){ return ()=>{ seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 // Each staff member gets their own shuffled order through the pool (seeded by their id), so no two people
 // get the same 3 questions on the same day, but the pool is still gone through fully before any repeat.
-function allQuestions(){ return [...((qPool && qPool.questions) || []), ...dishQuestions()]; }
+function allQuestions(){ return [...((qPool && qPool.questions) || []), ...examQuestions(), ...dishQuestions()]; }
 function todaysQuestions(playerId){
   const n = allQuestions().length;
   if (n < PER_DAY) return [];
@@ -1975,7 +1999,7 @@ let me = null;
 async function runDaily(){
   $('gate').classList.add('hidden'); $('dailyView').classList.remove('hidden'); $('pageTitle').textContent = 'Daily quiz';
   const box = $('dailyBox'); box.innerHTML = '<p class="note">Loading...</p>';
-  try{ await Promise.all([loadOutlets(), loadQuiz(), loadDishes()]); }
+  try{ await Promise.all([loadOutlets(), loadQuiz(), loadDishes(), loadExams()]); }
   catch(e){ box.innerHTML = '<h2>Could not load the quiz</h2><p class="note">Check your internet and refresh the page.</p>'; return; }
   if (!todaysQuestions().length){ box.innerHTML = '<h2>No quiz today</h2><p class="note">Questions haven\'t been added yet. Check back soon.</p>'; return; }
   let saved = null; try{ saved = localStorage.getItem('training_player'); }catch(e){}
@@ -2093,7 +2117,10 @@ async function openQuizAdmin(){
       <div class="note">${s.right} of ${s.total} answered correctly (${Math.round(s.right/s.total*100)}%)</div></div>`; }).join('')
     : '<p class="note">No one has played today yet.</p>';
   const isMaster = level==='master';
-  $('quizPoolInfo').textContent = (dishQuestions().length?`${dishQuestions().length} dish questions are created automatically from the Dish bank. `:'') + (qPool && qPool.questions.length ? `${qPool.questions.length} questions in the uploaded pool (${Math.floor(allQuestions().length/PER_DAY)} days of questions in total before any repeat).${isMaster?' Uploading a new file replaces the pool; scores are kept.':''}` : 'No uploaded question pool yet.');
+  $('quizPoolInfo').textContent = (dishQuestions().length?`${dishQuestions().length} dish questions are created automatically from the Dish bank. `:'') +
+    (examQuestions().length?`${examQuestions().length} questions are pulled automatically from uploaded exams (mcq, true/false and short-answer text questions — list and manual questions aren't used for the quiz). `:'') +
+    (qPool && qPool.questions.length ? `${qPool.questions.length} extra questions in the separately uploaded pool. ` : '') +
+    `${allQuestions().length} questions in total (${Math.floor(allQuestions().length/PER_DAY)} days before any repeat).`;
   $('quizFile').disabled = !isMaster; $('quizSeason').classList.toggle('hidden', !isMaster); $('quizDelPool').classList.toggle('hidden', !isMaster || !qPool || !qPool.questions.length);
   startLive(refreshQuizLive, 20000); // leaderboard and today's stats keep updating without a manual reload
 }
