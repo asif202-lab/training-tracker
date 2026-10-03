@@ -2214,6 +2214,7 @@ async function runDaily(){
   me ? dailyPlay() : dailyJoin();
 }
 function dailyJoin(){
+  clearDailyTimers(); // in case "Not me?" was tapped mid-question — don't let the old timer fire on the new identity
   const box = $('dailyBox');
   // Login is now just the Employee ID, matched against the imported staff roster — no name typing, no PIN,
   // no outlet picker. The roster already knows who they are and which outlet they belong to.
@@ -2264,7 +2265,17 @@ function localizedQ(q){
   const tOpts = q['options_'+curLang];
   return { text: q['q_'+curLang] || q.q, options: (Array.isArray(tOpts) && tOpts.length===q.options.length) ? tOpts : q.options };
 }
+const QUESTION_SECONDS = 12;
+// Tracked outside dailyPlay() so any re-render (language switch mid-question, a stray double-call) always
+// cancels whatever timers an earlier render started. Without this, switching language while a question is
+// showing left the OLD 10-second timer still running in the background — it could auto-submit the question
+// as unanswered later, even though the newly re-rendered countdown looked like it had just started. This is
+// almost certainly why "the first question skips early" — the language switcher sits right there on screen
+// exactly when someone's most likely to tap it, before settling in to answer.
+let dqTick = null, dqTimeout = null, dqWaitTick = null, dqWaitTimeout = null;
+function clearDailyTimers(){ clearInterval(dqTick); clearTimeout(dqTimeout); clearInterval(dqWaitTick); clearTimeout(dqWaitTimeout); }
 async function dailyPlay(){
+  clearDailyTimers(); // cancel anything left over from a previous render of this or an earlier question
   const box = $('dailyBox'), qs = todaysQuestions(me.id), today = todayStr();
   const mine = (me.days||{})[today] || [];
   if (mine.length >= qs.length) return dailyDone();
@@ -2273,8 +2284,8 @@ async function dailyPlay(){
   box.innerHTML = langSwitcher() + `<div class="qcard">
     <div class="qdots">${dots}</div>
     <div class="qhead">
-      <div><span class="qnum" style="margin:0">Question ${k+1} of ${qs.length}</span><div class="note" style="margin:0">Tap an answer below — you have 10 seconds</div></div>
-      <div class="timerRing" id="qTimer">10</div>
+      <div><span class="qnum" style="margin:0">Question ${k+1} of ${qs.length}</span><div class="note" style="margin:0">Tap an answer below — you have ${QUESTION_SECONDS} seconds</div></div>
+      <div class="timerRing" id="qTimer">${QUESTION_SECONDS}</div>
     </div>
     ${q.image?`<img class="qimg" src="${esc(q.image)}" alt="">`:''}${q.imgKey?`<img class="qimg" id="dImg" alt="">`:''}
     <div class="qtext">${esc(lq.text)}</div>
@@ -2286,20 +2297,20 @@ async function dailyPlay(){
   bindLangSwitcher(dailyPlay);
   $('notMe').onclick = e=>{ e.preventDefault(); try{ localStorage.removeItem('training_player'); }catch(err){} me=null; dailyJoin(); };
 
-  // 10 seconds to answer. Answering manually and timing out both go through finish() so the save logic
-  // (and the "one answer per question" guard) only lives in one place.
-  let answered = false, secondsLeft = 10;
-  const tick = setInterval(()=>{
+  // Answering manually and timing out both go through finish() so the save logic (and the "one answer
+  // per question" guard) only lives in one place.
+  let answered = false, secondsLeft = QUESTION_SECONDS;
+  dqTick = setInterval(()=>{
     secondsLeft--;
     const el = $('qTimer');
     if (el){ el.textContent = Math.max(secondsLeft,0); el.classList.toggle('warn', secondsLeft<=5 && secondsLeft>2); el.classList.toggle('danger', secondsLeft<=2 && secondsLeft>0); }
-    if (secondsLeft<=0) clearInterval(tick);
+    if (secondsLeft<=0) clearInterval(dqTick);
   }, 1000);
-  const timeout = setTimeout(()=>finish(null), 10000);
+  dqTimeout = setTimeout(()=>finish(null), QUESTION_SECONDS*1000);
 
   async function finish(pick){
     if (answered) return; answered = true;
-    clearInterval(tick); clearTimeout(timeout);
+    clearInterval(dqTick); clearTimeout(dqTimeout);
     box.querySelectorAll('.qopt').forEach(x=>x.disabled=true);
     const ok = pick!==null && pick === +q.answer;
     try{
@@ -2323,8 +2334,8 @@ async function dailyPlay(){
     let waitLeft = 4;
     const setWait = ()=>{ const el = $('nextCountdown'); if (el) el.textContent = (k+1<qs.length?'Next question in '+waitLeft+'...':'Showing your score in '+waitLeft+'...'); };
     setWait();
-    const waitTick = setInterval(()=>{ waitLeft--; if (waitLeft<=0){ clearInterval(waitTick); return; } setWait(); }, 1000);
-    setTimeout(()=>{ clearInterval(waitTick); if (!$('dailyView').classList.contains('hidden')) dailyPlay(); }, 4000);
+    dqWaitTick = setInterval(()=>{ waitLeft--; if (waitLeft<=0){ clearInterval(dqWaitTick); return; } setWait(); }, 1000);
+    dqWaitTimeout = setTimeout(()=>{ clearInterval(dqWaitTick); if (!$('dailyView').classList.contains('hidden')) dailyPlay(); }, 4000);
   }
   box.querySelectorAll('.qopt').forEach(b=>b.onclick = ()=>finish(+b.dataset.i));
 }
