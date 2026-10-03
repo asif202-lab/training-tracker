@@ -366,6 +366,16 @@
         </table></div>
       </div>
       <div class="card">
+        <h2>Training programs</h2>
+        <p class="note">Upload a training program file (.json — sections/topics, one or more phases). This is what fills the Program dropdown when adding a trainee. Uploading a file with the same program ID replaces it; deleting a program does not delete trainees already on it, but their checklist will show "Program not found" until reassigned.</p>
+        <div class="row" style="margin-bottom:10px"><input type="file" id="progFile" accept=".json,application/json"></div>
+        <p class="note err hidden" id="progErr"></p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Program</th><th>Days</th><th>Phases</th><th>Topics</th><th>Status</th><th></th></tr></thead>
+          <tbody id="progTable"></tbody>
+        </table></div>
+      </div>
+      <div class="card">
         <h2>Exam bank</h2>
         <p class="note">Upload an exam file (.json) to make it available online. Uploading a file with the same exam ID replaces that exam. Edit the pass mark, time limit (0 = no limit) or retake gap (days to wait after a fail) by changing the number. Pass mark changes apply to all results of that exam.</p>
         <div class="row" style="margin-bottom:10px"><input type="file" id="bankFile" accept=".json,application/json"></div>
@@ -385,7 +395,7 @@
         <div><label class="f" for="iEmp">Employee ID</label><input id="iEmp"></div>
         <div><label class="f" for="iOutlet">Outlet</label><select id="iOutlet"></select></div>
         <div><label class="f" for="iProg">Program</label>
-          <select id="iProg"><option value="NJ">New Joiner Server (30 days)</option><option value="FL">Future Leader (90 days)</option></select></div>
+          <select id="iProg"></select></div>
         <div><label class="f" for="iStart">Training start date</label><input type="date" id="iStart"></div>
         <div><label class="f" for="iBuddy">Buddy</label><input id="iBuddy" placeholder="Buddy's name"></div>
         <div><label class="f" for="iDesig">Designation</label><select id="iDesig"></select></div>
@@ -464,58 +474,37 @@ const LINK_PREFIX = 'training_x_';    // one-time exam links
 const VIEW_PREFIX = 'training_view_'; // read-only dashboard links — no password, revocable, zero edit rights
 const PENDING_PREFIX = 'training_pend_'; // outlet-submitted trainees awaiting master approval
 const EMP_PREFIX = 'training_emp_'; // imported staff roster — Employee ID login for the daily quiz
+const PROGRAM_PREFIX = 'training_prog_'; // uploadable training programs (sections/topics/phases)
 const PASS = 0.85;
 const LINK_HOURS = 72;
 
 /* ============ TRAINING PLANS ============ */
-const NJ = { name:'New Joiner Server', days:30, extDays:40, sections:[
-  {title:'Restaurant orientation', d:[1,1], topics:['Restaurant Overview','Outlet Familiarization','Personal Hygiene & Grooming','Health & Safety','Opening Procedures','Operational Procedures','Closing Procedures']},
-  {title:'Operational procedures', d:[2,7], topics:['Sequence of Service','Membership Card','Doomsday & Doomsday Kit','Cash Float Procedure','Payment & Settlement Procedures','Promotion & Discount Procedures','Phone Etiquette & Guest Communication']},
-  {title:'Customer service & sales', d:[8,13], topics:['Guest Service Excellence','Guest Communication & Service Etiquette','Guest Complaint Handling & Service Recovery','Upselling & Suggestive Selling','Google Reviews & Guest Feedback']},
-  {title:'POS & tablet system', d:[14,19], topics:['POS Navigation','Order Entry & Management','Table Management','Payment & Settlement (POS)','POS Validation']},
-  {title:'Food runner & delivery (Delco)', d:[20,25], topics:['Order Verification','Food Quality & Presentation','Serving & Packing Procedure','Dispatch & Documentation','Communication & Coordination']},
-  {title:'Bar workflow', d:[26,29], topics:['Opening Preparation','Order Processing','Beverage Preparation','Stock & Inventory Control','Closing Procedure']},
-  {title:'Final validation', d:[30,30], topics:['Final Validation & Development Feedback']}
-]};
-const FL_BASE = [
-  {title:'Training department orientation', d:[1,1], p1only:true, topics:['Meeting with Training Department','One-on-One Expectations Meeting','Team Introduction']},
-  {title:'Leadership skills', d:[2,6], topics:['Leadership Foundations']},
-  {title:'People & task management', d:[2,6], topics:['People & Task Management','Staff Scheduling Basics',['Week Review: People Assessment (360°)',[6,6]]]},
-  {title:'Motivation & teamwork', d:[2,6], topics:['Motivation & Teamwork']},
-  {title:'Operational skills', d:[7,12], topics:['Detailed Travel Path & Section Walkthrough','Conducting Effective Briefings','DM Checklist Management','PIC Role in Hygiene Practices','Dubai Food Inspection Familiarization (DM Files)','POS & Back-End Functions','Complaint Handling','Doomsday Procedure']},
-  {title:'Section awareness', d:[13,15], topics:['Bar Section','Delco / Food Runner','Service Section']},
-  {title:'Financial procedures', d:[16,20], topics:['Cash Handling Procedure','Inventory Management',['Week Review: Money Assessment',[20,20]],['Week Review: Material Assessment',[20,20]]]},
-  {title:'Technical skills', d:[21,25], topics:['Digital Reporting & POS Navigation','Shift Planning, Coverage & Peak Period Management','Prioritization Under Pressure','Reporting Cadence & Deadlines','KPI Tracking Basics']},
-  {title:'Operations practical', d:[26,28], topics:['Opening, Running, Closing Duties','Follow Operational SOPs','Online & Call Centre Coordination','CFP Policies & Procedures','Live Shift Practical']},
-  {title:'HR & company policies', d:[29,29], topics:['HR Policies','Company Policy','In-Charge Responsibilities for New Joiners','Consolidation & Practice Review']},
-  {title:'Final & validation', d:[30,30], final:true, topics:['Final & Validation Day']}
-];
-const PHASES = ['Phase 1: Show','Phase 2: Perform','Phase 3: Lead alone'];
+// Training programs are uploaded data now, not fixed code — any number of them, each with its own name,
+// length, and phase/section/topic structure. A program with one phase (most of them) shows as a single
+// checklist; a program with several phases (e.g. Show / Perform / Lead Alone) repeats its topics once per
+// phase, each with its own day range and its own tick, same mechanism either way.
+let programs = [];
+async function loadPrograms(){
+  programs = []; (await kvPrefix(PROGRAM_PREFIX)).forEach(v=>{ try{ const p = dec(v); if (!p.deleted) programs.push(p); }catch(e){} });
+  programs.sort((a,b)=>a.name.localeCompare(b.name));
+}
+const programById = id => programs.find(p=>p.id===id) || null;
 const PAPER_EXAMS = ['General Information Exam','Menu Knowledge','Sequence of Service','POS & Tablet','Promotions & Pricing','Food Hygiene','Bar Knowledge','Leadership Assessment','Final Validation','Other'];
 
 function itemsFor(prog){
   const out = [];
-  if (prog === 'NJ'){
-    NJ.sections.forEach((s,si)=> s.topics.forEach((t,ti)=> out.push({key:`s${si}_t${ti}`, phase:0, section:s.title, title:t, from:s.d[0], to:s.d[1]})));
-    return out;
-  }
-  for (let p=0;p<3;p++){
-    FL_BASE.forEach((s,si)=>{
-      if (s.p1only && p>0) return;
-      s.topics.forEach((t,ti)=>{
+  if (!prog || !Array.isArray(prog.phases)) return out;
+  prog.phases.forEach((ph,p)=>{
+    (ph.sections||[]).forEach((s,si)=>{
+      (s.topics||[]).forEach((t,ti)=>{
         const title = Array.isArray(t) ? t[0] : t;
         const d = Array.isArray(t) ? t[1] : s.d;
-        let from = d[0] + (p===1?29:p===2?59:0), to = d[1] + (p===1?29:p===2?59:0);
-        if (s.final && p===1){ from=59; to=60; }
-        if (s.final && p===2){ from=89; to=90; }
-        out.push({key:`p${p}_s${si}_t${ti}`, phase:p, section:s.title, title, from, to});
+        out.push({key:`p${p}_s${si}_t${ti}`, phase:p, section:s.title, title, from:d[0], to:d[1]});
       });
     });
-  }
+  });
   return out;
 }
-const ITEMS = { NJ: itemsFor('NJ'), FL: itemsFor('FL') };
-const LEN = { NJ:30, FL:90 };
 
 /* ============ DATA ============ */
 let access = {}, outlets = [], trainees = [], exams = [], level = null, myOutlet = null, current = null, phaseTab = 0;
@@ -702,6 +691,62 @@ function validateExam(ex){
   }
   return null;
 }
+function validateProgram(p){
+  if (!p || typeof p!=='object') return 'The file is not a valid program file.';
+  if (!p.id || !p.name) return 'The program file needs an "id" and a "name".';
+  if (!p.days || +p.days<1) return 'The program needs a "days" length (1 or more).';
+  if (!Array.isArray(p.phases) || !p.phases.length) return 'The program needs at least one phase in "phases".';
+  for (let ph=0; ph<p.phases.length; ph++){
+    const phase = p.phases[ph], pn = p.phases.length>1 ? 'Phase '+(ph+1) : 'The program';
+    if (!Array.isArray(phase.sections) || !phase.sections.length) return pn+' needs at least one section.';
+    for (let si=0; si<phase.sections.length; si++){
+      const s = phase.sections[si], sn = pn+', section '+(si+1);
+      if (!s.title) return sn+' needs a "title".';
+      if (!Array.isArray(s.d) || s.d.length!==2) return sn+' needs a day range "d": [from, to].';
+      if (!Array.isArray(s.topics) || !s.topics.length) return sn+' needs at least one topic.';
+      for (let ti=0; ti<s.topics.length; ti++){
+        const t = s.topics[ti];
+        if (Array.isArray(t) && (!t[0] || !Array.isArray(t[1]) || t[1].length!==2)) return sn+', topic '+(ti+1)+' needs [title, [from, to]] when given its own day range.';
+      }
+    }
+  }
+  return null;
+}
+function renderProgramBank(){
+  const isM = level==='master';
+  $('progFile').disabled = !isM;
+  $('progTable').innerHTML = programs.length ? programs.map(p=>{
+    const topicCount = itemsFor(p).length;
+    return `<tr><td><b>${esc(p.name)}</b>${p.uploaded?`<div class="note" style="margin:0">edited ${new Date(p.uploaded).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>`:''}</td>
+      <td>${p.days}${p.extendable?' (+ext to '+p.extDays+')':''}</td><td>${p.phases.length}</td><td>${topicCount}</td>
+      <td><span class="pill ${p.active===false?'s-wait':'s-ok'}">${p.active===false?'Hidden':'Active'}</span></td>
+      <td style="white-space:nowrap">${isM?`<button class="btn small" data-ptog="${esc(p.id)}">${p.active===false?'Show':'Hide'}</button> <button class="btn small danger" data-pdel="${esc(p.id)}">Delete</button>`:''}</td></tr>`;
+  }).join('') : `<tr><td colspan="6" class="note">No programs uploaded yet.</td></tr>`;
+  $('progTable').querySelectorAll('[data-ptog]').forEach(b=>b.onclick=async ()=>{
+    const p = programs.find(x=>x.id===b.dataset.ptog); p.active = p.active===false;
+    try{ await kvSet(PROGRAM_PREFIX+p.id, enc(p)); toast(p.active?'Program is now available':'Program hidden'); renderProgramBank(); }
+    catch(e){ toast('Could not save. Check your internet.'); p.active = p.active===false; }
+  });
+  $('progTable').querySelectorAll('[data-pdel]').forEach(b=>b.onclick=async ()=>{
+    const p = programs.find(x=>x.id===b.dataset.pdel);
+    if (!confirm(`Delete "${p.name}"? Trainees already on it keep their progress, but their checklist will show "Program not found" until reassigned.`)) return;
+    try{ await kvSet(PROGRAM_PREFIX+p.id, enc({ ...p, deleted:true })); await loadPrograms(); toast('Program deleted'); renderProgramBank(); }
+    catch(e){ toast('Could not delete. Check your internet.'); }
+  });
+}
+$('progFile').onchange = async e=>{
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  $('progErr').classList.add('hidden');
+  try{
+    const text = await f.text();
+    let p; try{ p = JSON.parse(text); }catch(e){ $('progErr').textContent = 'That file is not valid JSON.'; $('progErr').classList.remove('hidden'); return; }
+    const problem = validateProgram(p);
+    if (problem){ $('progErr').textContent = problem; $('progErr').classList.remove('hidden'); return; }
+    p.uploaded = new Date().toISOString();
+    await kvSet(PROGRAM_PREFIX+p.id, enc(p));
+    await loadPrograms(); toast('Program uploaded: '+p.name); renderProgramBank();
+  }catch(e){ $('progErr').textContent = 'Could not save. Check your internet and try again.'; $('progErr').classList.remove('hidden'); }
+};
 
 /* ============ CALCULATIONS ============ */
 const pad = n => String(n).padStart(2,'0');
@@ -734,27 +779,42 @@ function examSummary(t){
   return { count:g.length, passed:g.filter(x=>x.passed).length, failed:g.filter(x=>!x.passed && !x.pending).length, pending:g.filter(x=>x.pending).length };
 }
 function calc(t){
-  const items = ITEMS[t.program], done = t.topics||{};
+  const prog = programById(t.program);
+  const items = prog ? itemsFor(prog) : [], done = t.topics||{};
   const day = dayOf(t);
   const doneCount = items.filter(i=>done[i.key]).length;
   const late = items.filter(i=>!done[i.key] && i.to <= day-2);
-  const expected = Math.min(1, items.filter(i=>i.to <= day).length / items.length);
-  const td = parseDate(t.start); td.setDate(td.getDate() + LEN[t.program] - 1);
+  const expected = items.length ? Math.min(1, items.filter(i=>i.to <= day).length / items.length) : 0;
+  const progDays = prog ? prog.days : 30, progExtDays = prog ? (prog.extDays||prog.days) : 30;
+  const td = parseDate(t.start); td.setDate(td.getDate() + progDays - 1);
   const targetDate = `${td.getFullYear()}-${pad(td.getMonth()+1)}-${pad(td.getDate())}`;
   const ex = examSummary(t);
-  const allDone = doneCount === items.length;
+  const allDone = items.length>0 && doneCount === items.length;
   let status, cls;
   if (t.archived){ status='Archived'; cls='s-done'; }
   else if (t.completed){ status='Completed'; cls='s-done'; }
+  else if (!prog){ status='Program not found'; cls='s-behind'; }
   else if (day < 1){ status='Starts '+fmtDate(t.start); cls='s-wait'; }
   else if (allDone && ex.count>0 && ex.failed===0 && ex.pending===0){ status='Ready for sign-off'; cls='s-ready'; }
-  else if (t.program==='NJ' && day > NJ.days && day <= NJ.extDays){ status='Extension (day '+day+')'; cls='s-ext'; }
-  else if (day > (t.program==='NJ'?NJ.extDays:90)){ status='Overdue'; cls='s-behind'; }
+  else if (prog.extendable && day > progDays && day <= progExtDays){ status='Extension (day '+day+')'; cls='s-ext'; }
+  else if (day > progExtDays){ status='Overdue'; cls='s-behind'; }
   else if (late.length){ status=late.length+' topic'+(late.length>1?'s':'')+' behind'; cls='s-behind'; }
   else if (ex.failed){ status='Retake needed'; cls='s-behind'; }
   else if (ex.pending){ status='Exam awaiting review'; cls='s-wait'; }
   else { status='On track'; cls='s-ok'; }
-  return { day, doneCount, total:items.length, pct: doneCount/items.length, expected, targetDate, late, ex, status, cls, allDone };
+  return { day, doneCount, total:items.length, pct: items.length?doneCount/items.length:0, expected, targetDate, late, ex, status, cls, allDone, prog, items };
+}
+// Which phase "today" falls into for a multi-phase program (e.g. Show/Perform/Lead Alone) — the phase
+// whose earliest scheduled day has already arrived. Single-phase programs are always phase 0.
+function phaseIndexForDay(prog, day){
+  if (!prog || !prog.phases || prog.phases.length<=1) return 0;
+  const items = itemsFor(prog);
+  let best = 0;
+  prog.phases.forEach((ph,p)=>{
+    const pItems = items.filter(x=>x.phase===p);
+    if (pItems.length && day >= Math.min(...pItems.map(x=>x.from))) best = p;
+  });
+  return best;
 }
 
 /* ============ UI HELPERS ============ */
@@ -779,7 +839,7 @@ function roleName(){ return level==='master' ? 'Master' : level==='management' ?
 function signerFor(t){ return (t && (t.coverBuddy || t.buddy)) || roleName(); }
 // Designations and brands
 const DESIGS = ['Server','Sales Associate','Bartender','Food Runner / Delco','Cashier','Senior Server','Supervisor','OIC','Future Leader','Other'];
-const desigOf = t => t.designation || (t.program==='FL' ? 'Future Leader' : 'Server');
+const desigOf = t => t.designation || (programById(t.program)||{}).defaultDesignation || 'Server';
 const BRANDS = ['LBKK','SB','TRD'];
 const BRAND_NAMES = { LBKK:'Little Bangkok', SB:'Superbowl', TRD:'The Red Door', Other:'Other' };
 function brandOf(outletId){
@@ -836,7 +896,7 @@ function renderPending(){
     box.classList.toggle('hidden', !pending.length);
     if (pending.length) box.innerHTML = `<h2 style="margin:0 0 8px">Waiting for approval (${pending.length})</h2>` +
       pending.map(p=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)">
-        <div><b>${esc(p.name)}</b><div class="note" style="margin:0">${esc(p.requestedBy)} · ${esc(p.program==='FL'?'Future Leader':'New Joiner Server')} · from ${fmtDate(p.start)}</div></div>
+        <div><b>${esc(p.name)}</b><div class="note" style="margin:0">${esc(p.requestedBy)} · ${esc((programById(p.program)||{}).name || p.program)} · from ${fmtDate(p.start)}</div></div>
         <div class="row"><button class="btn small primary" data-approve="${esc(p.id)}">Approve</button><button class="btn small danger" data-reject="${esc(p.id)}">Reject</button></div>
       </div>`).join('');
     box.querySelectorAll('[data-approve]').forEach(b=>b.onclick=async ()=>{
@@ -1028,7 +1088,7 @@ $('logout').onclick = e=>{
 };
 const renderList = renderOverview;
 $('doneToggle').onclick = e=>{ e.preventDefault(); showDone=!showDone; renderOverview(); };
-$('bankBtn').onclick = ()=>{ show('bankView'); renderBank(); renderDishBank(); };
+$('bankBtn').onclick = ()=>{ show('bankView'); renderBank(); renderDishBank(); renderProgramBank(); };
 $('bankBack').onclick = ()=>{ show('listView'); renderOverview(); };
 
 /* ============ EXAM BANK ============ */
@@ -1097,7 +1157,9 @@ function openForm(t){
   $('iName').value = t?.name||''; $('iEmp').value = t?.empId||'';
   $('iOutlet').value = t?.outlet || myOutlet || outlets[0]?.id;
   $('iOutlet').disabled = level==='outlet';
-  $('iProg').value = t?.program||'NJ'; $('iProg').disabled = !!t;
+  $('iProg').innerHTML = programs.length ? programs.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} (${p.days} days)</option>`).join('') : '<option value="">No programs uploaded yet</option>';
+  $('iProg').value = t?.program || (programs[0] && programs[0].id) || '';
+  $('iProg').disabled = !!t;
   $('iStart').value = t?.start || todayStr(); $('iBuddy').value = t?.buddy||'';
   const dg = t ? desigOf(t) : 'Server';
   $('iDesig').innerHTML = DESIGS.map(d=>`<option>${esc(d)}</option>`).join('');
@@ -1137,7 +1199,7 @@ $('formCancel').onclick = ()=> editingId ? openDetail(editingId) : show('listVie
 /* ============ DETAIL ============ */
 function openDetail(id){
   current = trainees.find(t=>t.id===id); if (!current) return;
-  if (current.program==='FL'){ const d=dayOf(current); phaseTab = d>60?2:d>30?1:0; }
+  phaseTab = phaseIndexForDay(programById(current.program), dayOf(current));
   renderDetail(); show('detailView');
 }
 function renderDetail(){
@@ -1145,13 +1207,13 @@ function renderDetail(){
   $('dHead').innerHTML = `
     <div class="row" style="justify-content:space-between">
       <div><h2 style="margin:0">${esc(t.name)}</h2>
-      <div class="note">${esc(outletName(t.outlet))} · ${t.program==='NJ'?'New Joiner Server (30 days)':'Future Leader (90 days)'}${t.empId?' · ID '+esc(t.empId):''}</div>
+      <div class="note">${esc(outletName(t.outlet))} · ${esc(c.prog ? c.prog.name+' ('+c.prog.days+' days)' : 'Program not found: '+t.program)}${t.empId?' · ID '+esc(t.empId):''}</div>
       <div class="note">Started ${fmtDate(t.start)} · Buddy: ${esc(t.buddy||'-')}</div></div>
       <span class="pill ${c.cls}">${esc(c.status)}</span>
     </div>
     <div class="row" style="margin-top:10px"><div class="bar grow"><i style="width:${Math.round(c.pct*100)}%"></i></div>
     <b>${c.doneCount} / ${c.total} topics</b></div>
-    <p class="note">${c.day>=1?'Today is day '+c.day+' of '+LEN[t.program]+'.':''} ${c.late.length?'<span class="err">'+c.late.length+' topic(s) past their scheduled day.</span>':''}</p>
+    <p class="note">${c.day>=1 && c.prog?'Today is day '+c.day+' of '+c.prog.days+'.':''} ${c.late.length?'<span class="err">'+c.late.length+' topic(s) past their scheduled day.</span>':''}</p>
     <div class="row"><button class="btn small" id="printRec">Print training record</button></div>`;
   $('printRec').onclick = ()=>printRecord(t);
   $('signer').textContent = signerFor(t) + (t.coverBuddy ? ' (covering for '+(t.buddy||'-')+')' : '');
@@ -1178,23 +1240,24 @@ function renderDetail(){
   ['eName','eDate','eScore','eTotal','eAdd'].forEach(id=>$(id).disabled = locked);
 
   // Checklist
-  const items = ITEMS[t.program];
+  const items = c.items, prog = c.prog;
   let showItems = items;
-  if (t.program==='FL'){
+  if (prog && prog.phases && prog.phases.length>1){
     $('phaseTabs').classList.remove('hidden');
-    $('phaseTabs').innerHTML = PHASES.map((p,i)=>{
+    $('phaseTabs').innerHTML = prog.phases.map((ph,i)=>{
       const pi = items.filter(x=>x.phase===i), dn = pi.filter(x=>(t.topics||{})[x.key]).length;
-      return `<button class="${i===phaseTab?'on':''}" data-p="${i}">${p} (${dn}/${pi.length})</button>`;
+      return `<button class="${i===phaseTab?'on':''}" data-p="${i}">${esc(ph.label||'Phase '+(i+1))} (${dn}/${pi.length})</button>`;
     }).join('');
     $('phaseTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{ phaseTab=+b.dataset.p; renderDetail(); });
     showItems = items.filter(x=>x.phase===phaseTab);
   } else $('phaseTabs').classList.add('hidden');
   const row = i=>{
     const d = (t.topics||{})[i.key], late = !d && i.to <= c.day-2 && !locked;
+    const phaseLabel = (prog && prog.phases && prog.phases.length>1 && prog.phases[i.phase]) ? ' · '+(prog.phases[i.phase].label||'Phase '+(i.phase+1)).split(':')[0] : '';
     return `<div class="topic ${late?'late':''}">
       <button class="chk ${d?'on':''}" data-k="${i.key}" aria-label="${esc(i.title)}" ${locked?'disabled':''}>${d?'✓':''}</button>
       <div class="t"><b>${esc(i.title)}</b>
-      <div class="meta">${d?'Done '+fmtDate(d.d)+' · signed by '+esc(d.by):'Scheduled day '+(i.from===i.to?i.from:i.from+'–'+i.to)+(late?' · overdue':'')}${t.program==='FL'?' · '+PHASES[i.phase].split(':')[0]:''}</div></div></div>`;
+      <div class="meta">${d?'Done '+fmtDate(d.d)+' · signed by '+esc(d.by):'Scheduled day '+(i.from===i.to?i.from:i.from+'–'+i.to)+(late?' · overdue':'')}${phaseLabel}</div></div></div>`;
   };
   // Today's topics: scheduled today, plus anything overdue - shown first so buddies don't scroll.
   const done = t.topics||{};
@@ -1214,8 +1277,8 @@ function renderDetail(){
   $('checklist').querySelectorAll('.chk').forEach(b=>b.onclick=()=>toggleTopic(b.dataset.k));
 
   // Notes / extension
-  $('dNotes').innerHTML = `<h2>Notes${t.program==='NJ'?' and extension':''}</h2>
-    ${t.program==='NJ'?'<label class="f" for="extReason">Reason for 10-day extension (filled by OIC)</label><textarea id="extReason">'+esc(t.extReason||'')+'</textarea>':''}
+  $('dNotes').innerHTML = `<h2>Notes${c.prog && c.prog.extendable?' and extension':''}</h2>
+    ${c.prog && c.prog.extendable?'<label class="f" for="extReason">Reason for extension (filled by OIC)</label><textarea id="extReason">'+esc(t.extReason||'')+'</textarea>':''}
     <label class="f" for="notes">Buddy / OIC notes</label><textarea id="notes">${esc(t.notes||'')}</textarea>
     <div class="row" style="margin-top:8px"><button class="btn" id="saveNotes" ${locked?'disabled':''}>Save notes</button></div>`;
   $('saveNotes').onclick = async ()=>{
@@ -1384,10 +1447,11 @@ $('viewLinkBtn').onclick = async ()=>{
 };
 
 function printRecord(t){
-  const c = calc(t), items = ITEMS[t.program], done = t.topics||{};
+  const c = calc(t), items = c.items, prog = c.prog, done = t.topics||{};
   let rows = '', lastSec = '';
   items.forEach(i=>{
-    const sec = (t.program==='FL' ? PHASES[i.phase]+' · ' : '') + i.section;
+    const phLabel = (prog && prog.phases && prog.phases.length>1 && prog.phases[i.phase]) ? (prog.phases[i.phase].label||'Phase '+(i.phase+1))+' · ' : '';
+    const sec = phLabel + i.section;
     if (sec!==lastSec){ rows += `<tr><th colspan="4" style="text-align:left;background:#eef2f6">${esc(sec)} (day ${i.from===i.to?i.from:i.from+'–'+i.to})</th></tr>`; lastSec=sec; }
     const d = done[i.key];
     rows += `<tr><td>${esc(i.title)}</td><td>${d?'✓':''}</td><td>${d?fmtDate(d.d):''}</td><td>${d?esc(d.by):''}</td></tr>`;
@@ -1403,7 +1467,7 @@ function printRecord(t){
   <button onclick="print()" style="float:right;padding:6px 14px">Print / Save as PDF</button>
   <h1>Training record</h1>
   <table class="info"><tr><td><b>Name:</b> ${esc(t.name)}</td><td><b>Employee ID:</b> ${esc(t.empId||'-')}</td><td><b>Designation:</b> ${esc(desigOf(t))}</td></tr>
-  <tr><td><b>Outlet:</b> ${esc(outletName(t.outlet))}</td><td><b>Program:</b> ${t.program==='NJ'?'New Joiner Server (30 days)':'Future Leader (90 days)'}</td><td><b>Buddy:</b> ${esc(t.buddy||'-')}</td></tr>
+  <tr><td><b>Outlet:</b> ${esc(outletName(t.outlet))}</td><td><b>Program:</b> ${esc(prog ? prog.name+' ('+prog.days+' days)' : t.program)}</td><td><b>Buddy:</b> ${esc(t.buddy||'-')}</td></tr>
   <tr><td><b>Start date:</b> ${fmtDate(t.start)}</td><td><b>Progress:</b> ${c.doneCount} / ${c.total} topics (${Math.round(c.pct*100)}%)</td><td><b>Status:</b> ${esc(c.status)}${t.completed?' on '+fmtDate(t.completed.d):''}</td></tr></table>
   <h2>Training topics</h2><table><tr><th>Topic</th><th>Done</th><th>Date</th><th>Signed by</th></tr>${rows}</table>
   <h2>Exam results (pass mark per exam, all attempts)</h2><table><tr><th>Exam</th><th>Attempts</th><th>Result</th></tr>${ex}</table>
@@ -2128,15 +2192,17 @@ function dailyJoin(){
   const go = async ()=>{
     const id = $('jEmpId').value.trim();
     if (!id) return err('Enter your Employee ID.');
-    const emp = employees.find(e=>e.id===id);
-    if (!emp) return err('Employee ID not found. Check with your buddy or OIC.');
     $('jGo').disabled = true;
     try{
+      // Any ID gets in — the quiz should never block someone from playing. If the ID matches the
+      // staff roster, use the real name/outlet; if not (roster not updated yet, a new hire, a typo
+      // that still gets a result), they still play under whatever ID they typed.
+      const emp = employees.find(e=>e.id===id);
       let p = players.find(x=>x.id===id);
       if (!p){
-        p = { id, name:emp.name, outlet:emp.outlet, joined:todayStr(), days:{} };
+        p = { id, name: emp ? emp.name : ('Staff '+id), outlet: emp ? emp.outlet : '', joined:todayStr(), days:{} };
         await kvSet(PLAYER_PREFIX+id, JSON.stringify(p)); players.push(p);
-      } else if (p.name!==emp.name || p.outlet!==emp.outlet){
+      } else if (emp && (p.name!==emp.name || p.outlet!==emp.outlet)){
         p.name = emp.name; p.outlet = emp.outlet; // keep in sync if the roster changes later
         await kvSet(PLAYER_PREFIX+id, JSON.stringify(p));
       }
@@ -2552,7 +2618,7 @@ $('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
   try{
     const a = await kvGet('access_passwords'); if (a) access = JSON.parse(a);
     if (access.whatsapp) $('banner').href = 'https://wa.me/'+access.whatsapp;
-    await Promise.all([loadOutlets(), loadAll(), loadExams(), loadDishes(), loadEmployees()]);
+    await Promise.all([loadOutlets(), loadAll(), loadExams(), loadDishes(), loadEmployees(), loadPrograms()]);
     if (viewToken){
       const raw = await kvGet(VIEW_PREFIX+viewToken);
       if (!raw){ $('loading').textContent = 'This view-only link has been turned off or never existed. Ask for a new one.'; $('loading').style.color = 'var(--red)'; return; }
