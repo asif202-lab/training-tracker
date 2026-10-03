@@ -347,6 +347,12 @@
     <div id="rosterView" class="hidden">
       <div class="row" style="margin-bottom:10px"><button class="btn" id="rosterBack">Back to overview</button></div>
       <div class="card">
+        <h2>Outlets</h2>
+        <p class="note">The outlet list used across the training tracker — the same one the sales tracker uses. If a branch (e.g. a Super Bowl or Little Bangkok location) isn't matching correctly during a roster import, it's usually because it isn't in this list yet — add it below, or fix its name directly.</p>
+        <div id="outletMgmt"></div>
+        <div class="row" style="margin-top:8px"><input id="newOutletName" placeholder="New outlet name, e.g. Super Bowl - Discovery Gardens" style="flex:1"><button class="btn primary" id="addOutletBtn">Add outlet</button></div>
+      </div>
+      <div class="card">
         <h2>Staff roster</h2>
         <p class="note">Upload the staff CSV (columns: identification_id, employee_name, company_joining_date, department_name — date of birth is optional, see note below). This is what staff use to log into the daily quiz with just their Employee ID, and it also powers the service-anniversary recognition on the overview page.</p>
         <div class="row" style="margin-bottom:10px"><input type="file" id="rosterFile" accept=".csv,text/csv"></div>
@@ -2473,24 +2479,30 @@ function renderPlayerAnswers(player, dateStr){
       ${!a.ok?`<div class="note">Correct answer: ${esc(q.options[q.answer])}</div>`:''}</div>`;
   }).join('');
 }
+// One click on a name opens this already showing their most recent day's actual questions and answers —
+// no second click needed to drill into a day. Other days are still listed below for anyone who wants to
+// look further back, but seeing today's (or their latest) answers never requires more than the one click.
 function openPlayerDetail(playerId){
   const p = players.find(x=>x.id===playerId); if (!p) return;
   const box = $('playerDetailBox'); box.classList.remove('hidden');
   const profile = categoryProfile(p);
   const days = Object.keys(p.days||{}).sort().reverse().slice(0,14);
+  const latest = days[0];
   box.innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(p.name)}</h2><button class="btn small" id="pdClose">Close</button></div>
     <p class="note" style="margin-top:0">${esc(outletName(p.outlet)||'No outlet')}</p>
     ${profile.length ? `<h3>Strengths & weaknesses</h3>` + profile.map(c=>
       `<div class="row" style="justify-content:space-between;padding:4px 0;border-top:1px solid var(--line)"><span>${esc(c.cat)}</span><b style="color:${c.pct<60?'var(--red)':c.pct>=85?'var(--green)':'var(--amber)'}">${c.pct}% (${c.right}/${c.total})</b></div>`
     ).join('') : '<p class="note">No answers yet.</p>'}
-    <h3 style="margin-top:14px">Recent days</h3>
-    ${days.length ? days.map(d=>{ const arr = p.days[d]; const right = arr.filter(a=>a.ok).length;
+    <h3 style="margin-top:14px" id="pdDayTitle">${latest?'Questions & answers — '+fmtDate(latest):'No days played yet'}</h3>
+    <div id="pdDayDetail">${latest?renderPlayerAnswers(p, latest):''}</div>
+    ${days.length>1 ? `<h3 style="margin-top:14px">Other days</h3>` + days.slice(1).map(d=>{ const arr = p.days[d]; const right = arr.filter(a=>a.ok).length;
       return `<div class="row" style="justify-content:space-between;padding:4px 0;border-top:1px solid var(--line);cursor:pointer" data-day="${esc(d)}"><span>${fmtDate(d)}</span><b>${right} / ${arr.length}</b></div>`;
-    }).join('') : '<p class="note">No days played yet.</p>'}
-    <div id="pdDayDetail"></div>`;
+    }).join('') : ''}`;
   box.querySelector('#pdClose').onclick = ()=>box.classList.add('hidden');
   box.querySelectorAll('[data-day]').forEach(row=>row.onclick=()=>{
-    $('pdDayDetail').innerHTML = `<h3 style="margin-top:14px">${fmtDate(row.dataset.day)}</h3>` + renderPlayerAnswers(p, row.dataset.day);
+    $('pdDayTitle').textContent = 'Questions & answers — '+fmtDate(row.dataset.day);
+    $('pdDayDetail').innerHTML = renderPlayerAnswers(p, row.dataset.day);
+    box.scrollIntoView({ behavior:'smooth', block:'start' });
   });
   box.scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -2547,7 +2559,49 @@ async function openRosterAdmin(){
   $('rosterFile').disabled = level!=='master';
   try{ await loadEmployees(); }catch(e){}
   renderRosterList();
+  renderOutletMgmt();
 }
+// Writes to the same outlet_list/settings_* keys the sales tracker already reads — this is the one place
+// in the training tracker that can actually create or rename an outlet, not just match against one.
+function renderOutletMgmt(){
+  const isM = level==='master';
+  $('addOutletBtn').disabled = !isM;
+  $('outletMgmt').innerHTML = outlets.length ? outlets.map(o=>
+    `<div class="row" style="margin:6px 0;align-items:center"><input data-oid="${esc(o.id)}" value="${esc(o.name)}" style="flex:1" ${isM?'':'disabled'}><span class="note" id="oSaved_${esc(o.id)}" style="width:50px"></span></div>`
+  ).join('') : '<p class="note">No outlets configured yet — add the first one below.</p>';
+  if (!isM) return;
+  $('outletMgmt').querySelectorAll('[data-oid]').forEach(inp=>{
+    let timer;
+    inp.oninput = ()=>{
+      clearTimeout(timer);
+      timer = setTimeout(async ()=>{
+        const o = outlets.find(x=>x.id===inp.dataset.oid); if (!o) return;
+        const name = inp.value.trim(); if (!name) return;
+        o.name = name;
+        try{ await kvSet('settings_'+o.id, JSON.stringify({ outletName:name })); const s=$('oSaved_'+o.id); if (s){ s.textContent='Saved'; setTimeout(()=>s.textContent='',1500); } }
+        catch(e){ toast('Could not save. Check your internet.'); }
+      }, 700);
+    };
+  });
+}
+$('addOutletBtn').onclick = async ()=>{
+  const name = $('newOutletName').value.trim();
+  if (!name) return;
+  $('addOutletBtn').disabled = true;
+  try{
+    const id = 'outlet_' + Date.now().toString(36);
+    const raw = await kvGet('outlet_list', true);
+    const list = raw ? JSON.parse(raw) : [];
+    list.push({ id, storageKey:id });
+    await kvSet('outlet_list', JSON.stringify(list));
+    await kvSet('settings_'+id, JSON.stringify({ outletName:name }));
+    await loadOutlets();
+    $('newOutletName').value = '';
+    renderOutletMgmt();
+    toast('Outlet added: '+name);
+  }catch(e){ toast('Could not add outlet. Check your internet.'); }
+  $('addOutletBtn').disabled = false;
+};
 // Culex's own outlet code scheme — LB = Little Bangkok, SB = Super Bowl, TRD/RD = The Red Door — recognised
 // directly so a staff file import resolves automatically, with no manual step, for every branch code the
 // company actually uses. Handles both the squished HR-system codes ("LBJLT Production", "SBPVL Service")
