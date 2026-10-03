@@ -341,8 +341,8 @@
       </div>
       <div class="card" id="rosterListCard">
         <h2>Imported staff (<span id="rosterCount">0</span>)</h2>
-        <p class="note">Search by name or Employee ID.</p>
-        <input id="rosterSearch" style="width:100%;margin-bottom:8px" placeholder="Search...">
+        <p class="note">Search by name, Employee ID, or outlet — change an outlet right in the table below (e.g. after a transfer).</p>
+        <input id="rosterSearch" style="width:100%;margin-bottom:8px" placeholder="🔍 Search by name, ID or outlet...">
         <div class="tablewrap"><table>
           <thead><tr><th>ID</th><th>Name</th><th>Outlet</th><th>Joined</th></tr></thead>
           <tbody id="rosterTable"></tbody>
@@ -2377,10 +2377,33 @@ function matchOutlet(dept){
 function renderRosterList(){
   $('rosterCount').textContent = employees.length;
   const q = norm($('rosterSearch') ? $('rosterSearch').value : '');
-  const rows = employees.filter(e=>!q || norm(e.name).includes(q) || e.id.includes(q))
+  const rows = employees.filter(e=>!q || norm(e.name).includes(q) || e.id.includes(q) || norm(outletName(e.outlet)).includes(q))
     .sort((a,b)=>a.name.localeCompare(b.name));
-  $('rosterTable').innerHTML = rows.length ? rows.map(e=>`<tr><td>${esc(e.id)}</td><td>${esc(e.name)}</td><td>${esc(outletName(e.outlet)||'No outlet')}</td><td>${e.joined?fmtDate(e.joined):'-'}</td></tr>`).join('')
-    : `<tr><td colspan="4" class="note">${employees.length?'No matches.':'No staff imported yet. Upload the CSV above.'}</td></tr>`;
+  const isM = level==='master';
+  const outletOpts = `<option value="">No outlet</option>` + outlets.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
+  $('rosterTable').innerHTML = rows.length ? rows.map(e=>`<tr><td>${esc(e.id)}</td><td>${esc(e.name)}</td>
+      <td>${isM ? `<select data-emp-outlet="${esc(e.id)}" style="width:100%">${outletOpts}</select>` : esc(outletName(e.outlet)||'No outlet')}</td>
+      <td>${e.joined?fmtDate(e.joined):'-'}</td></tr>`).join('')
+    : `<tr><td colspan="4" class="note">${employees.length?'No matches — try a different name or outlet.':'No staff imported yet. Upload the CSV above.'}</td></tr>`;
+  if (isM){
+    $('rosterTable').querySelectorAll('[data-emp-outlet]').forEach(sel=>{
+      const id = sel.dataset.empOutlet, emp = employees.find(x=>x.id===id);
+      sel.value = emp.outlet || '';
+      sel.onchange = async ()=>{
+        sel.disabled = true;
+        const newOutlet = sel.value;
+        try{
+          emp.outlet = newOutlet;
+          await kvSet(EMP_PREFIX+id, JSON.stringify(emp));
+          // Keep their quiz/leaderboard grouping in sync right away, not just on their next login.
+          const p = players.find(x=>x.id===id);
+          if (p && p.outlet!==newOutlet){ p.outlet = newOutlet; await kvSet(PLAYER_PREFIX+id, JSON.stringify(p)); }
+          toast('Outlet updated for '+emp.name);
+        }catch(e){ toast('Could not save. Check your internet.'); sel.value = emp.outlet || ''; }
+        sel.disabled = false;
+      };
+    });
+  }
 }
 $('rosterBtn').onclick = ()=>openRosterAdmin();
 $('rosterBack').onclick = ()=>{ show('listView'); renderOverview(); };
