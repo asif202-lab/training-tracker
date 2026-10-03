@@ -264,6 +264,7 @@
             <button class="btn" id="dishBtn">Dish training</button>
             <button class="btn" id="quizBtn">Daily quiz</button>
             <button class="btn" id="bankBtn">Exam bank</button>
+            <button class="btn" id="rosterBtn">Staff roster</button>
             <button class="btn hidden" id="backupBtn">Backup</button>
             <button class="btn primary" id="addBtn">Add trainee</button>
           </div>
@@ -294,12 +295,57 @@
       </div>
       <div class="card"><h2>Leaderboard</h2><div id="quizLb"></div></div>
       <div class="card"><h2>Today's questions</h2><div id="quizToday"></div></div>
+      <div class="card">
+        <h2>Participation</h2>
+        <p class="note" id="partSummary"></p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Outlet</th><th>Staff</th><th>Played today</th><th>Played 0 days this week</th></tr></thead>
+          <tbody id="partByOutlet"></tbody>
+        </table></div>
+        <h3 style="margin-top:14px">Hasn't played today (<span id="nonTodayCount">0</span>)</h3>
+        <p class="note" style="margin-top:0">For following up directly — a weekly miss matters more than a single day, so anyone also shown in red below has played zero days in the last 7.</p>
+        <input id="nonTodaySearch" style="width:100%;margin-bottom:6px" placeholder="Search name, ID or outlet...">
+        <div class="tablewrap"><table>
+          <thead><tr><th>Name</th><th>ID</th><th>Outlet</th><th>Days played (last 7)</th></tr></thead>
+          <tbody id="nonTodayTable"></tbody>
+        </table></div>
+      </div>
       <div class="card" id="quizPoolCard">
         <h2>Question pool</h2>
         <p class="note" id="quizPoolInfo"></p>
         <div class="row"><input type="file" id="quizFile" accept=".json,application/json"></div>
         <p class="note err hidden" id="quizErr"></p>
         <div class="row" style="margin-top:10px"><button class="btn danger" id="quizSeason">Start a new season (reset scores)</button><button class="btn danger" id="quizDelPool">Delete uploaded question pool</button></div>
+      </div>
+    </div>
+
+    <!-- STAFF ROSTER -->
+    <div id="rosterView" class="hidden">
+      <div class="row" style="margin-bottom:10px"><button class="btn" id="rosterBack">Back to overview</button></div>
+      <div class="card">
+        <h2>Staff roster</h2>
+        <p class="note">Upload the staff CSV (columns: identification_id, employee_name, company_joining_date, department_name — date of birth is optional, see note below). This is what staff use to log into the daily quiz with just their Employee ID, and it also powers the service-anniversary recognition on the overview page.</p>
+        <div class="row" style="margin-bottom:10px"><input type="file" id="rosterFile" accept=".csv,text/csv"></div>
+        <p class="note err hidden" id="rosterErr"></p>
+        <p class="note" id="rosterInfo"></p>
+      </div>
+      <div class="card hidden" id="rosterReviewCard">
+        <h2>Check outlet matching before importing</h2>
+        <p class="note">Each department was matched to an outlet automatically — check the ones marked <b>unmatched</b> and fix any that look wrong, then import. Head-office departments (Central Kitchen, Accounts, HR, etc.) can stay as "No outlet" — they just won't show up in an outlet's own daily quiz group, but can still log in and play.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>ID</th><th>Name</th><th>Department (from file)</th><th>Outlet</th></tr></thead>
+          <tbody id="rosterReviewBody"></tbody>
+        </table></div>
+        <div class="row" style="margin-top:10px"><button class="btn primary" id="rosterImport">Import staff roster</button><button class="btn" id="rosterCancel">Cancel</button></div>
+      </div>
+      <div class="card" id="rosterListCard">
+        <h2>Imported staff (<span id="rosterCount">0</span>)</h2>
+        <p class="note">Search by name or Employee ID.</p>
+        <input id="rosterSearch" style="width:100%;margin-bottom:8px" placeholder="Search...">
+        <div class="tablewrap"><table>
+          <thead><tr><th>ID</th><th>Name</th><th>Outlet</th><th>Joined</th></tr></thead>
+          <tbody id="rosterTable"></tbody>
+        </table></div>
       </div>
     </div>
 
@@ -415,6 +461,7 @@ const PREFIX = 'training_t_';         // trainee records
 const EXAM_PREFIX = 'training_exam_'; // uploaded exam papers
 const LINK_PREFIX = 'training_x_';    // one-time exam links
 const PENDING_PREFIX = 'training_pend_'; // outlet-submitted trainees awaiting master approval
+const EMP_PREFIX = 'training_emp_'; // imported staff roster — Employee ID login for the daily quiz
 const PASS = 0.85;
 const LINK_HOURS = 72;
 
@@ -494,6 +541,37 @@ let pending = [];
 async function loadAll(){
   trainees = []; (await kvPrefix(PREFIX)).forEach(v=>{ try{ trainees.push(JSON.parse(v)); }catch(e){} });
   pending = []; (await kvPrefix(PENDING_PREFIX)).forEach(v=>{ try{ pending.push(JSON.parse(v)); }catch(e){} });
+}
+let employees = [];
+async function loadEmployees(){
+  employees = []; (await kvPrefix(EMP_PREFIX)).forEach(v=>{ try{ employees.push(JSON.parse(v)); }catch(e){} });
+}
+// Minimal CSV parser — handles quoted fields with embedded commas, which a simple split(',') would break on.
+function parseCSV(text){
+  const rows = []; let row = [], field = '', inQ = false;
+  const s = text.replace(/\r\n/g,'\n');
+  for (let i=0;i<s.length;i++){
+    const c = s[i];
+    if (inQ){
+      if (c==='"'){ if (s[i+1]==='"'){ field+='"'; i++; } else inQ=false; }
+      else field += c;
+    } else if (c==='"') inQ = true;
+    else if (c===','){ row.push(field); field=''; }
+    else if (c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+    else field += c;
+  }
+  if (field!=='' || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const headers = rows[0].map(h=>h.trim());
+  return rows.slice(1).filter(r=>r.some(c=>c.trim()!=='')).map(r=>{
+    const o = {}; headers.forEach((h,i)=>o[h]=(r[i]||'').trim()); return o;
+  });
+}
+// "24/05/2012" (day/month/year, as used throughout the UAE and in this file) -> "2012-05-24".
+function parseDMY(s){
+  const m = String(s||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  return `${m[3]}-${pad(+m[2])}-${pad(+m[1])}`;
 }
 let allExams = [];
 async function loadExams(){
@@ -683,7 +761,7 @@ const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','
 let liveTimer = null;
 function stopLive(){ if (liveTimer){ clearInterval(liveTimer); liveTimer=null; } }
 function startLive(fn, ms=20000){ stopLive(); liveTimer = setInterval(fn, ms); }
-function show(view){ stopLive(); ['listView','formView','detailView','bankView','quizView'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); window.scrollTo(0,0); }
+function show(view){ stopLive(); ['listView','formView','detailView','bankView','quizView','rosterView'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); window.scrollTo(0,0); }
 function toast(msg){ const d=document.createElement('div'); d.className='toast'; d.textContent=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),2400); }
 function modal(html, sticky){
   const o=document.createElement('div'); o.className='overlay'; o.innerHTML=`<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
@@ -860,7 +938,9 @@ function renderExamReview(){
 function renderOverview(){
   $('whoAmI').textContent = level==='master'?'Master access':level==='management'?'Management access':outletName(myOutlet);
   $('backupBtn').classList.toggle('hidden', level!=='master');
+  $('rosterBtn').classList.toggle('hidden', level!=='master');
   renderPending();
+  renderAnniversaryPopup();
   renderExamReview();
   startLive(refreshOverviewLive, 20000); // keeps this report live without a manual reload
   const pool = visible().filter(t=>!t.archived);
@@ -1967,23 +2047,23 @@ async function sha(text){ const b = await crypto.subtle.digest('SHA-256', new Te
 const LANGS = { en:'English', tl:'Tagalog', hi:'हिन्दी', my:'မြန်မာ', ne:'नेपाली' };
 const T = {
   en:{ join:'Join the daily quiz', sub:'3 quick questions every day. Get them right to climb the team leaderboard.', new:"I'm new here", old:"I've joined before",
-    name:'Your full name', outlet:'Your outlet', pin:'Choose a 4-digit PIN (so only you can play as you)', pinOld:'Your PIN', who:'Your name', go:'Continue',
+    name:'Your full name', empId:'Your Employee ID', outlet:'Your outlet', pin:'Choose a 4-digit PIN (so only you can play as you)', pinOld:'Your PIN', who:'Your name', go:'Continue',
     notMe:'Not', correct:'Correct! +1 point', wrong:'Not quite. The right answer is', next:'Next question in a moment...', score:'Showing your score in a moment...',
     perfect:'Perfect day!', good:'Good try!', luck:'Better luck tomorrow!', tomorrow:'New questions tomorrow. Come back every day to keep climbing.', youAre:'You are' },
   tl:{ join:'Sumali sa daily quiz', sub:'3 mabilis na tanong araw-araw. Sagutin nang tama para umangat sa leaderboard.', new:'Bago lang ako dito', old:'Nakasali na ako dati',
-    name:'Buong pangalan', outlet:'Iyong outlet', pin:'Pumili ng 4-digit na PIN (para ikaw lang ang makapaglaro bilang ikaw)', pinOld:'Iyong PIN', who:'Iyong pangalan', go:'Magpatuloy',
+    name:'Buong pangalan', empId:'Iyong Employee ID', outlet:'Iyong outlet', pin:'Pumili ng 4-digit na PIN (para ikaw lang ang makapaglaro bilang ikaw)', pinOld:'Iyong PIN', who:'Iyong pangalan', go:'Magpatuloy',
     notMe:'Hindi', correct:'Tama! +1 puntos', wrong:'Mali. Ang tamang sagot ay', next:'Susunod na tanong sandali lang...', score:'Ipapakita ang iyong score sandali lang...',
     perfect:'Perpektong araw!', good:'Magandang subok!', luck:'Sana sa susunod!', tomorrow:'Bagong tanong bukas. Bumalik araw-araw para umangat.', youAre:'Ikaw ay' },
   hi:{ join:'डेली क्विज़ में शामिल हों', sub:'हर दिन 3 आसान सवाल। सही जवाब देकर टीम लीडरबोर्ड में आगे बढ़ें।', new:'मैं यहाँ नया हूँ', old:'मैं पहले शामिल हो चुका/चुकी हूँ',
-    name:'आपका पूरा नाम', outlet:'आपका आउटलेट', pin:'4 अंकों का पिन चुनें (ताकि सिर्फ आप ही खेल सकें)', pinOld:'आपका पिन', who:'आपका नाम', go:'जारी रखें',
+    name:'आपका पूरा नाम', empId:'आपका एम्प्लॉई आईडी', outlet:'आपका आउटलेट', pin:'4 अंकों का पिन चुनें (ताकि सिर्फ आप ही खेल सकें)', pinOld:'आपका पिन', who:'आपका नाम', go:'जारी रखें',
     notMe:'यह मैं नहीं हूँ', correct:'सही! +1 अंक', wrong:'गलत। सही जवाब है', next:'अगला सवाल कुछ ही देर में...', score:'आपका स्कोर कुछ ही देर में...',
     perfect:'शानदार दिन!', good:'अच्छी कोशिश!', luck:'कल फिर कोशिश करें!', tomorrow:'कल नए सवाल आएंगे। रोज़ आकर आगे बढ़ते रहें।', youAre:'आप हैं' },
   my:{ join:'နေ့စဉ် ပဟေဠိတွင် ပါဝင်ပါ', sub:'နေ့စဉ် မေးခွန်း ၃ ခု။ မှန်ကန်စွာဖြေပြီး အဖွဲ့ ဇယားတွင် အမှတ်တက်ပါ။', new:'ကျွန်တော်/မ ဒီမှာ အသစ်ပါ', old:'ကျွန်တော်/မ ယခင်က ဝင်ပြီးပါပြီ',
-    name:'အမည်အပြည့်အစုံ', outlet:'သင့် ဆိုင်ခွဲ', pin:'ဂဏန်း ၄ လုံး PIN ရွေးပါ', pinOld:'သင့် PIN', who:'သင့်အမည်', go:'ဆက်လက်လုပ်ဆောင်ပါ',
+    name:'အမည်အပြည့်အစုံ', empId:'သင့် ဝန်ထမ်း အိုင်ဒီ', outlet:'သင့် ဆိုင်ခွဲ', pin:'ဂဏန်း ၄ လုံး PIN ရွေးပါ', pinOld:'သင့် PIN', who:'သင့်အမည်', go:'ဆက်လက်လုပ်ဆောင်ပါ',
     notMe:'ကျွန်တော်/မ မဟုတ်ပါ', correct:'မှန်ပါသည်! +1 မှတ်', wrong:'မမှန်ပါ။ မှန်ကန်သော အဖြေမှာ', next:'နောက်မေးခွန်း မကြာမီ...', score:'သင့်ရမှတ် မကြာမီ...',
     perfect:'အကောင်းဆုံးနေ့!', good:'ကြိုးစားမှု ကောင်းပါတယ်!', luck:'မနက်ဖြန် ထပ်ကြိုးစားပါ!', tomorrow:'မနက်ဖြန် မေးခွန်းအသစ်များ ရှိပါမည်။', youAre:'သင်သည်' },
   ne:{ join:'दैनिक क्विजमा सामेल हुनुहोस्', sub:'हरेक दिन ३ छिटो प्रश्न। सही उत्तर दिएर टिम लिडरबोर्डमा माथि जानुहोस्।', new:'म यहाँ नयाँ हुँ', old:'म पहिले नै सामेल भइसकेको छु',
-    name:'तपाईंको पूरा नाम', outlet:'तपाईंको आउटलेट', pin:'४ अंकको PIN छान्नुहोस्', pinOld:'तपाईंको PIN', who:'तपाईंको नाम', go:'अगाडि बढ्नुहोस्',
+    name:'तपाईंको पूरा नाम', empId:'तपाईंको कर्मचारी आईडी', outlet:'तपाईंको आउटलेट', pin:'४ अंकको PIN छान्नुहोस्', pinOld:'तपाईंको PIN', who:'तपाईंको नाम', go:'अगाडि बढ्नुहोस्',
     notMe:'म होइन', correct:'सही! +१ अंक', wrong:'गलत। सही उत्तर हो', next:'अर्को प्रश्न केही क्षणमा...', score:'तपाईंको स्कोर केही क्षणमा...',
     perfect:'उत्कृष्ट दिन!', good:'राम्रो प्रयास!', luck:'भोलि फेरि प्रयास गर्नुहोस्!', tomorrow:'भोलि नयाँ प्रश्नहरू। हरेक दिन फर्किएर माथि जानुहोस्।', youAre:'तपाईं हुनुहुन्छ' }
 };
@@ -1999,7 +2079,7 @@ let me = null;
 async function runDaily(){
   $('gate').classList.add('hidden'); $('dailyView').classList.remove('hidden'); $('pageTitle').textContent = 'Daily quiz';
   const box = $('dailyBox'); box.innerHTML = '<p class="note">Loading...</p>';
-  try{ await Promise.all([loadOutlets(), loadQuiz(), loadDishes(), loadExams()]); }
+  try{ await Promise.all([loadOutlets(), loadQuiz(), loadDishes(), loadExams(), loadEmployees()]); }
   catch(e){ box.innerHTML = '<h2>Could not load the quiz</h2><p class="note">Check your internet and refresh the page.</p>'; return; }
   if (!todaysQuestions().length){ box.innerHTML = '<h2>No quiz today</h2><p class="note">Questions haven\'t been added yet. Check back soon.</p>'; return; }
   let saved = null; try{ saved = localStorage.getItem('training_player'); }catch(e){}
@@ -2008,58 +2088,58 @@ async function runDaily(){
 }
 function dailyJoin(){
   const box = $('dailyBox');
-  const outletOpts = outlets.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
+  // Login is now just the Employee ID, matched against the imported staff roster — no name typing, no PIN,
+  // no outlet picker. The roster already knows who they are and which outlet they belong to.
   box.innerHTML = langSwitcher() + `<h2>${t('join')}</h2>
     <p class="note">${t('sub')}</p>
-    <div class="tabs"><button class="on" data-j="new">${t('new')}</button><button data-j="old">${t('old')}</button></div>
-    <div id="jNew">
-      <label class="f" for="jName">${t('name')}</label><input id="jName" style="width:100%" autocomplete="name">
-      <label class="f" for="jOutlet">${t('outlet')}</label><select id="jOutlet" style="width:100%">${outletOpts}</select>
-      <label class="f" for="jPin">${t('pin')}</label><input id="jPin" inputmode="numeric" maxlength="4" style="width:100%" type="password">
-    </div>
-    <div id="jOld" class="hidden">
-      <label class="f" for="jOutlet2">${t('outlet')}</label><select id="jOutlet2" style="width:100%">${outletOpts}</select>
-      <label class="f" for="jWho">${t('who')}</label><select id="jWho" style="width:100%"></select>
-      <label class="f" for="jPin2">${t('pinOld')}</label><input id="jPin2" inputmode="numeric" maxlength="4" style="width:100%" type="password">
-    </div>
+    <label class="f" for="jEmpId">${t('empId')}</label>
+    <input id="jEmpId" inputmode="numeric" style="width:100%" placeholder="e.g. 245" autocomplete="off">
     <p class="note err hidden" id="jErr"></p>
     <div class="row" style="margin-top:12px"><button class="btn primary" id="jGo">${t('go')}</button></div>`;
   bindLangSwitcher(dailyJoin);
-  let mode = 'new';
-  box.querySelectorAll('[data-j]').forEach(b=>b.onclick=()=>{ mode=b.dataset.j; box.querySelectorAll('[data-j]').forEach(x=>x.classList.toggle('on',x===b)); $('jNew').classList.toggle('hidden',mode!=='new'); $('jOld').classList.toggle('hidden',mode!=='old'); });
-  const fillWho = ()=>{ $('jWho').innerHTML = players.filter(p=>p.outlet===$('jOutlet2').value).sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('') || '<option value="">No one from this outlet yet</option>'; };
-  $('jOutlet2').onchange = fillWho; fillWho();
+  $('jEmpId').focus();
   const err = m=>{ $('jErr').textContent=m; $('jErr').classList.remove('hidden'); };
-  $('jGo').onclick = async ()=>{
+  const go = async ()=>{
+    const id = $('jEmpId').value.trim();
+    if (!id) return err('Enter your Employee ID.');
+    const emp = employees.find(e=>e.id===id);
+    if (!emp) return err('Employee ID not found. Check with your buddy or OIC.');
+    $('jGo').disabled = true;
     try{
-      if (mode==='new'){
-        const name = $('jName').value.trim().replace(/\s+/g,' '), pin = $('jPin').value.trim(), outlet = $('jOutlet').value;
-        if (name.split(' ').length < 2) return err('Enter your full name (first and last name).');
-        if (!/^\d{4}$/.test(pin)) return err('Your PIN must be 4 numbers.');
-        if (players.some(p=>norm(p.name)===norm(name) && p.outlet===outlet)) return err('This name is already registered at this outlet. Use "I\'ve joined before".');
-        const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-        me = { id, name, outlet, pin: await sha(id+pin), joined: todayStr(), days:{} };
-        await kvSet(PLAYER_PREFIX+id, JSON.stringify(me)); players.push(me);
-      } else {
-        const p = players.find(x=>x.id===$('jWho').value); if (!p) return err('Choose your name.');
-        if (p.pin !== await sha(p.id+$('jPin2').value.trim())) return err('Wrong PIN. Try again.');
-        me = p;
+      let p = players.find(x=>x.id===id);
+      if (!p){
+        p = { id, name:emp.name, outlet:emp.outlet, joined:todayStr(), days:{} };
+        await kvSet(PLAYER_PREFIX+id, JSON.stringify(p)); players.push(p);
+      } else if (p.name!==emp.name || p.outlet!==emp.outlet){
+        p.name = emp.name; p.outlet = emp.outlet; // keep in sync if the roster changes later
+        await kvSet(PLAYER_PREFIX+id, JSON.stringify(p));
       }
+      me = p;
       try{ localStorage.setItem('training_player', me.id); }catch(e){}
       dailyPlay();
-    }catch(e){ err('Could not connect. Check your internet and try again.'); }
+    }catch(e){ err('Could not connect. Check your internet and try again.'); $('jGo').disabled=false; }
   };
+  $('jGo').onclick = go;
+  $('jEmpId').onkeydown = e=>{ if (e.key==='Enter') go(); };
+}
+// A question can optionally carry a translated version per language — q_tl/q_hi/q_my/q_ne for the question
+// text, options_tl/options_hi/options_my/options_ne for the answer list (same order as "options", so the
+// correct-answer index still lines up). Falls back to English wherever a translation hasn't been added.
+function localizedQ(q){
+  if (curLang==='en') return { text:q.q, options:q.options };
+  const tOpts = q['options_'+curLang];
+  return { text: q['q_'+curLang] || q.q, options: (Array.isArray(tOpts) && tOpts.length===q.options.length) ? tOpts : q.options };
 }
 async function dailyPlay(){
   const box = $('dailyBox'), qs = todaysQuestions(me.id), today = todayStr();
   const mine = (me.days||{})[today] || [];
   if (mine.length >= qs.length) return dailyDone();
-  const k = mine.length, q = allQuestions()[qs[k]];
+  const k = mine.length, q = allQuestions()[qs[k]], lq = localizedQ(q);
   box.innerHTML = langSwitcher() + `<div class="row" style="justify-content:space-between"><span class="qnum">Question ${k+1} of ${qs.length} · today</span><a href="#" id="notMe" class="note">${t('notMe')} ${esc(me.name.split(' ')[0])}?</a></div>
     <div class="bar"><i style="width:${Math.round(k/qs.length*100)}%"></i></div>
     ${q.image?`<img class="qimg" src="${esc(q.image)}" alt="">`:''}${q.imgKey?`<img class="qimg" id="dImg" alt="">`:''}
-    <div class="qtext">${esc(q.q)}</div>
-    ${q.options.map((o,i)=>`<button class="opt" data-i="${i}">${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
+    <div class="qtext">${esc(lq.text)}</div>
+    ${lq.options.map((o,i)=>`<button class="opt" data-i="${i}">${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     <div id="dFb"></div>`;
   if (q.imgKey) getImg(q.imgKey).then(src=>{ const el=$('dImg'); if (el && src) el.src = src; });
   bindLangSwitcher(dailyPlay);
@@ -2074,7 +2154,7 @@ async function dailyPlay(){
       me = fresh; const i = players.findIndex(p=>p.id===me.id); if (i>=0) players[i]=me;
     }catch(e){ box.querySelectorAll('.opt').forEach(x=>x.disabled=false); toast('Could not save. Check your internet.'); return; }
     box.querySelectorAll('.opt').forEach(x=>{ const xi=+x.dataset.i; if (xi===+q.answer) x.classList.add('right'); else if (xi===pick) x.classList.add('wrong'); });
-    $('dFb').innerHTML = `<p style="font-weight:700;color:${ok?'var(--green)':'var(--red)'}">${ok?t('correct'):t('wrong')+' '+String.fromCharCode(65+ +q.answer)+'.'}</p>
+    $('dFb').innerHTML = `<p style="font-weight:700;color:${ok?'var(--green)':'var(--red)'}">${ok?t('correct'):t('wrong')+' '+String.fromCharCode(65+ +q.answer)+'. '+esc(lq.options[+q.answer])}</p>
       ${q.explain?`<p class="note">${esc(q.explain)}</p>`:''}
       <p class="note">${k+1<qs.length?t('next'):t('score')}</p>`;
     setTimeout(()=>{ if (!$('dailyView').classList.contains('hidden')) dailyPlay(); }, 4000);
@@ -2122,10 +2202,46 @@ async function openQuizAdmin(){
     (qPool && qPool.questions.length ? `${qPool.questions.length} extra questions in the separately uploaded pool. ` : '') +
     `${allQuestions().length} questions in total (${Math.floor(allQuestions().length/PER_DAY)} days before any repeat).`;
   $('quizFile').disabled = !isMaster; $('quizSeason').classList.toggle('hidden', !isMaster); $('quizDelPool').classList.toggle('hidden', !isMaster || !qPool || !qPool.questions.length);
+  renderParticipation();
   startLive(refreshQuizLive, 20000); // leaderboard and today's stats keep updating without a manual reload
 }
 // Lighter refresh for the quiz panel — updates the leaderboard and today's stats only, so it doesn't
 // disturb a pass-mark field or a file upload someone might be mid-way through on the rest of the screen.
+// Participation is measured against the full staff roster, not just against people who have ever played —
+// someone who has NEVER opened the quiz has no "players" record at all, so without cross-referencing the
+// roster they'd be invisible instead of showing up as a non-participant.
+function participationReport(){
+  const today = todayStr();
+  const weekStart = new Date(); weekStart.setDate(weekStart.getDate()-6); weekStart.setHours(0,0,0,0);
+  const byOutlet = {}; const nonToday = [];
+  employees.forEach(e=>{
+    const p = players.find(x=>x.id===e.id);
+    const playedToday = !!(p && p.days && p.days[today] && p.days[today].length);
+    const daysThisWeek = p && p.days ? Object.keys(p.days).filter(d=>{
+      const dt = new Date(d+'T00:00:00'); return !isNaN(dt) && dt >= weekStart;
+    }).length : 0;
+    const key = e.outlet || '';
+    const ob = byOutlet[key] = byOutlet[key] || { name: outletName(e.outlet) || 'No outlet', total:0, playedToday:0, zeroWeek:0 };
+    ob.total++; if (playedToday) ob.playedToday++; if (daysThisWeek===0) ob.zeroWeek++;
+    if (!playedToday) nonToday.push({ id:e.id, name:e.name, outlet:e.outlet, daysThisWeek });
+  });
+  nonToday.sort((a,b)=> a.daysThisWeek - b.daysThisWeek || a.name.localeCompare(b.name));
+  return { byOutlet, nonToday, total: employees.length, playedToday: employees.length - nonToday.length };
+}
+function renderParticipation(){
+  if (!employees.length){ $('partSummary').textContent = 'Import the staff roster (Staff roster tab) to see participation.'; $('partByOutlet').innerHTML=''; $('nonTodayTable').innerHTML=''; $('nonTodayCount').textContent='0'; return; }
+  const r = participationReport();
+  $('partSummary').textContent = `${r.playedToday} of ${r.total} staff have played today (${Math.round(r.playedToday/r.total*100)}%).`;
+  $('partByOutlet').innerHTML = Object.values(r.byOutlet).sort((a,b)=>a.name.localeCompare(b.name)).map(o=>
+    `<tr><td>${esc(o.name)}</td><td>${o.total}</td><td>${o.playedToday} (${Math.round(o.playedToday/o.total*100)}%)</td><td>${o.zeroWeek?`<span style="color:var(--red);font-weight:700">${o.zeroWeek}</span>`:'0'}</td></tr>`
+  ).join('');
+  $('nonTodayCount').textContent = r.nonToday.length;
+  const q = norm($('nonTodaySearch').value);
+  const rows = r.nonToday.filter(x=>!q || norm(x.name).includes(q) || x.id.includes(q) || norm(outletName(x.outlet)).includes(q));
+  $('nonTodayTable').innerHTML = rows.length ? rows.map(x=>
+    `<tr${x.daysThisWeek===0?' style="background:var(--red-bg)"':''}><td>${esc(x.name)}</td><td>${esc(x.id)}</td><td>${esc(outletName(x.outlet)||'No outlet')}</td><td>${x.daysThisWeek} / 7</td></tr>`
+  ).join('') : '<tr><td colspan="4" class="note">Everyone has played today.</td></tr>';
+}
 async function refreshQuizLive(){
   if ($('quizView').classList.contains('hidden')) return;
   try{ await loadQuiz(); }catch(e){ return; }
@@ -2143,7 +2259,156 @@ async function refreshQuizLive(){
     return `<div class="rev"><b>${esc(q.q)}</b><div class="note" style="color:var(--green)">Answer: ${esc(q.options[q.answer])}</div>
       <div class="note">${s.right} of ${s.total} answered correctly (${Math.round(s.right/s.total*100)}%)</div></div>`; }).join('')
     : '<p class="note">No one has played today yet.</p>';
+  renderParticipation();
 }
+// Shows once per login, not on every live-refresh re-render. Covers both birthdays and work
+// anniversaries in one popup rather than stacking two separate modals on top of each other.
+let anniversaryShown = false;
+function todayMatches(dateStr){
+  if (!dateStr) return null;
+  const parts = dateStr.split('-'); if (parts.length!==3) return null;
+  const today = new Date(), mm = pad(today.getMonth()+1), dd = pad(today.getDate());
+  const [y,m,d] = parts;
+  return (m===mm && d===dd) ? today.getFullYear()-(+y) : null;
+}
+function renderAnniversaryPopup(){
+  if (level!=='master' || anniversaryShown || !employees.length) return;
+  const birthdays = employees.filter(e=>e.dob && todayMatches(e.dob)!==null);
+  const anniversaries = employees.filter(e=>{ const y = todayMatches(e.joined); return y!==null && y>=1; })
+    .map(e=>({ ...e, years: todayMatches(e.joined) })).sort((a,b)=>b.years-a.years);
+  if (!birthdays.length && !anniversaries.length) return;
+  anniversaryShown = true;
+  const section = (title, rows) => !rows.length ? '' : `<h3 style="margin:14px 0 4px">${title}</h3>` +
+    rows.map(h=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)"><b>${esc(h.name)}</b><span class="note">${h.years?h.years+' year'+(h.years>1?'s':''):''} · ${esc(outletName(h.outlet)||h.dept||'-')}</span></div>`).join('');
+  const m = modal(`<h2>Today's recognition</h2>
+    <p class="note">A good moment to wish or thank these staff in person.</p>
+    ${section('🎂 Birthdays today', birthdays)}
+    ${section('🎉 Work anniversaries today', anniversaries)}
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="annClose">Close</button></div>`);
+  m.querySelector('#annClose').onclick = ()=>m.remove();
+}
+/* ============ STAFF ROSTER ============ */
+let rosterParsed = null; // rows awaiting review before import
+async function openRosterAdmin(){
+  show('rosterView'); $('pageTitle').textContent = 'Staff roster';
+  $('rosterFile').disabled = level!=='master';
+  try{ await loadEmployees(); }catch(e){}
+  renderRosterList();
+}
+// Culex's own outlet code scheme — LB = Little Bangkok, SB = Super Bowl, TRD/RD = The Red Door — recognised
+// directly so a staff file import resolves automatically, with no manual step, for every branch code the
+// company actually uses. Handles both the squished HR-system codes ("LBJLT Production", "SBPVL Service")
+// and the spelled-out names ("Little Bangkok -JLT", "Super Bowl - The Pavilion").
+const OUTLET_BRANDS = [
+  { brand:'little bangkok', codes:['lb'] },
+  { brand:'super bowl', codes:['sb'] },
+  { brand:'red door', codes:['trd','rd'] }
+];
+const LOCATION_ALIASES = {
+  dhe: ['dhe','dubai hills'],
+  dso: ['dso','silicon oasis'],
+  jlt: ['jlt'],
+  mtc: ['mtc','motor city'],
+  omt: ['omt','oud metha','oud mehta'],
+  rak: ['rak','hamra','al hamra','ras al khaimah'],
+  twr: ['twr','tower','szr','sheikh zayed'],
+  cpth: ['cpth','copthorne','copthrone','deira'],
+  pvl: ['pvl','pavilion','discovery']
+};
+function matchOutlet(dept){
+  const raw = norm(dept);
+  if (!raw) return '';
+  const stripped = raw.replace(/\b(production|service|outsource|sound line)\b/g,' ').replace(/\s+/g,' ').trim();
+  let brand = null, rest = stripped;
+  for (const b of OUTLET_BRANDS){
+    if (stripped.startsWith(b.brand)){ brand = b.brand; rest = stripped.slice(b.brand.length).trim(); break; }
+    const code = b.codes.find(c=>stripped.startsWith(c));
+    if (code){ brand = b.brand; rest = stripped.slice(code.length).trim(); break; }
+  }
+  if (brand){
+    const brandOutlets = outlets.filter(o=>{ const on = norm(o.name); return on.includes(brand) || (brand==='little bangkok' && on.includes('lbkk')); });
+    const pool = brandOutlets.length ? brandOutlets : outlets;
+    if (brand==='red door') return (pool.find(o=>norm(o.name).includes('red door')) || pool[0] || {}).id || '';
+    let locKey = Object.keys(LOCATION_ALIASES).find(k=>rest.startsWith(k));
+    if (!locKey) locKey = Object.keys(LOCATION_ALIASES).find(k=>LOCATION_ALIASES[k].some(a=>rest.includes(a)));
+    if (locKey){
+      const hit = pool.find(o=>LOCATION_ALIASES[locKey].some(a=>norm(o.name).includes(a)));
+      if (hit) return hit.id;
+    }
+    if (brandOutlets.length===1) return brandOutlets[0].id; // only one outlet for this brand — no location needed
+  }
+  // Anything else (head-office departments, unrecognised text) falls back to a general fuzzy match.
+  let best = null, bestScore = 0;
+  outlets.forEach(o=>{
+    const on = norm(o.name);
+    if (!on) return;
+    const sc = (' '+raw+' ').includes(' '+on+' ') || (' '+on+' ').includes(' '+raw+' ') ? 2 : matches(dept, o.name) ? 1 : 0;
+    if (sc > bestScore){ bestScore = sc; best = o.id; }
+  });
+  return best || '';
+}
+function renderRosterList(){
+  $('rosterCount').textContent = employees.length;
+  const q = norm($('rosterSearch') ? $('rosterSearch').value : '');
+  const rows = employees.filter(e=>!q || norm(e.name).includes(q) || e.id.includes(q))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  $('rosterTable').innerHTML = rows.length ? rows.map(e=>`<tr><td>${esc(e.id)}</td><td>${esc(e.name)}</td><td>${esc(outletName(e.outlet)||'No outlet')}</td><td>${e.joined?fmtDate(e.joined):'-'}</td></tr>`).join('')
+    : `<tr><td colspan="4" class="note">${employees.length?'No matches.':'No staff imported yet. Upload the CSV above.'}</td></tr>`;
+}
+$('rosterBtn').onclick = ()=>openRosterAdmin();
+$('rosterBack').onclick = ()=>{ show('listView'); renderOverview(); };
+$('rosterSearch').oninput = ()=>renderRosterList();
+$('rosterFile').onchange = async e=>{
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  $('rosterErr').classList.add('hidden');
+  try{
+    const text = await f.text();
+    const rows = parseCSV(text);
+    if (!rows.length){ $('rosterErr').textContent = 'No rows found in that file.'; $('rosterErr').classList.remove('hidden'); return; }
+    const idCol = Object.keys(rows[0]).find(k=>/identification|employee.?id|^id$/i.test(k));
+    const nameCol = Object.keys(rows[0]).find(k=>/employee.?name|^name$/i.test(k));
+    const deptCol = Object.keys(rows[0]).find(k=>/department/i.test(k));
+    const dateCol = Object.keys(rows[0]).find(k=>/(company|group).?joining.?date/i.test(k));
+    const dobCol = Object.keys(rows[0]).find(k=>/birth|^dob$/i.test(k)); // optional — most staff files won't have this
+    if (!idCol || !nameCol){ $('rosterErr').textContent = 'Could not find an ID column and a name column in this file.'; $('rosterErr').classList.remove('hidden'); return; }
+    rosterParsed = rows.map(r=>({
+      id: String(r[idCol]||'').trim(),
+      name: String(r[nameCol]||'').trim(),
+      dept: deptCol ? String(r[deptCol]||'').trim() : '',
+      joined: dateCol ? parseDMY(r[dateCol]) : null,
+      dob: dobCol ? parseDMY(r[dobCol]) : null,
+      outlet: deptCol ? matchOutlet(r[deptCol]) : ''
+    })).filter(r=>r.id && r.name);
+    $('rosterInfo').textContent = `${rosterParsed.length} rows read from the file.${dobCol?'':' No date-of-birth column found — birthday recognition needs that column added to the file.'}`;
+    renderRosterReview();
+  }catch(err){ $('rosterErr').textContent = 'Could not read that file. Make sure it is a .csv export.'; $('rosterErr').classList.remove('hidden'); }
+};
+function renderRosterReview(){
+  if (!rosterParsed) return;
+  $('rosterReviewCard').classList.remove('hidden');
+  const outletOpts = `<option value="">No outlet</option>` + outlets.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
+  $('rosterReviewBody').innerHTML = rosterParsed.map((r,i)=>`<tr>
+      <td>${esc(r.id)}</td><td>${esc(r.name)}</td><td>${esc(r.dept)||'-'}</td>
+      <td><select data-ro="${i}" style="width:100%">${outletOpts}</select>
+        ${!r.outlet && r.dept ? '<div class="note" style="color:var(--amber);margin:2px 0 0">unmatched</div>' : ''}</td>
+    </tr>`).join('');
+  $('rosterReviewBody').querySelectorAll('[data-ro]').forEach(sel=>{
+    const i = +sel.dataset.ro; sel.value = rosterParsed[i].outlet || '';
+    sel.onchange = ()=>{ rosterParsed[i].outlet = sel.value; };
+  });
+}
+$('rosterCancel').onclick = ()=>{ rosterParsed = null; $('rosterReviewCard').classList.add('hidden'); $('rosterFile').value=''; };
+$('rosterImport').onclick = async ()=>{
+  if (!rosterParsed || !rosterParsed.length) return;
+  $('rosterImport').disabled = true;
+  try{
+    await Promise.all(rosterParsed.map(r=>kvSet(EMP_PREFIX+r.id, JSON.stringify({ id:r.id, name:r.name, outlet:r.outlet, dept:r.dept, joined:r.joined, dob:r.dob }))));
+    toast(`${rosterParsed.length} staff imported`);
+    rosterParsed = null; $('rosterReviewCard').classList.add('hidden'); $('rosterFile').value='';
+    await loadEmployees(); renderRosterList();
+  }catch(e){ toast('Could not import. Check your internet and try again.'); }
+  $('rosterImport').disabled = false;
+};
 function validatePool(p){
   const list = Array.isArray(p) ? p : p && p.questions;
   if (!Array.isArray(list) || list.length < PER_DAY) return 'The pool needs at least 3 questions.';
@@ -2178,6 +2443,7 @@ $('quizSeason').onclick = async ()=>{
   try{ await kvSet(QUIZ_CFG, JSON.stringify(qCfg)); toast('New season started'); openQuizAdmin(); }catch(e){ toast('Could not save. Check your internet.'); }
 };
 $('quizBtn').onclick = ()=>openQuizAdmin();
+$('nonTodaySearch').oninput = ()=>renderParticipation();
 $('quizBack').onclick = ()=>{ show('listView'); renderOverview(); };
 
 /* ============ LOGIN ============ */
@@ -2217,7 +2483,7 @@ $('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
   try{
     const a = await kvGet('access_passwords'); if (a) access = JSON.parse(a);
     if (access.whatsapp) $('banner').href = 'https://wa.me/'+access.whatsapp;
-    await Promise.all([loadOutlets(), loadAll(), loadExams(), loadDishes()]);
+    await Promise.all([loadOutlets(), loadAll(), loadExams(), loadDishes(), loadEmployees()]);
     $('loading').classList.add('hidden'); $('pw').disabled=false; $('pwGo').disabled=false; $('pw').focus();
   }catch(e){
     $('loading').textContent = 'Could not connect. Check your internet and refresh the page.';
