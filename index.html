@@ -2397,7 +2397,25 @@ async function openQuizAdmin(){
   startLive(refreshQuizLive, 20000); // leaderboard and participation keep updating without a manual reload
 }
 function bindLbClicks(){
-  document.querySelectorAll('#quizLb tr[data-pid]').forEach(tr=>tr.onclick=()=>openPlayerDetail(tr.dataset.pid));
+  document.querySelectorAll('#quizLb tr[data-pid]').forEach(tr=>tr.onclick=()=>toggleInlineResult(tr));
+}
+// Opens right under the clicked name, inside the leaderboard itself — no separate box, no scrolling to find it.
+function toggleInlineResult(tr){
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('pd-row')){ next.remove(); return; } // tap again to close
+  document.querySelectorAll('#quizLb tr.pd-row').forEach(r=>r.remove()); // only one open at a time
+  const p = players.find(x=>x.id===tr.dataset.pid); if (!p) return;
+  const today = todayStr(), profile = categoryProfile(p);
+  const row = document.createElement('tr');
+  row.className = 'pd-row';
+  row.innerHTML = `<td colspan="3" style="background:var(--bg);padding:12px">
+    <div class="sofar-h">Today's questions & answers</div>
+    ${renderPlayerAnswers(p, today)}
+    ${profile.length ? `<div class="sofar-h" style="margin-top:10px">Strengths & weaknesses</div>` + profile.map(c=>
+      `<div class="row" style="justify-content:space-between;padding:3px 0"><span>${esc(c.cat)}</span><b style="color:${c.pct<60?'var(--red)':c.pct>=85?'var(--green)':'var(--amber)'}">${c.pct}% (${c.right}/${c.total})</b></div>`
+    ).join('') : ''}
+  </td>`;
+  tr.insertAdjacentElement('afterend', row);
 }
 // Lighter refresh for the quiz panel — updates the leaderboard and participation only, so it doesn't
 // disturb a pass-mark field or a file upload someone might be mid-way through on the rest of the screen.
