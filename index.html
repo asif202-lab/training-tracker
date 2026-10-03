@@ -81,6 +81,28 @@
   .qtext{font-size:19px;font-weight:600;margin:6px 0 14px;line-height:1.35}
   .opt{display:block;width:100%;text-align:left;padding:12px 14px;margin:8px 0;border:2px solid var(--line);border-radius:10px;background:#fff;font:inherit;cursor:pointer;color:var(--ink)}
   .opt.sel{border-color:var(--navy);background:var(--blue-bg);font-weight:600}
+  /* Daily quiz — its own option style (separate from .opt so the formal exam flow is untouched) */
+  .qcard{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px;margin:10px 0;box-shadow:0 1px 3px rgba(20,28,38,.06)}
+  .qdots{display:flex;gap:7px;justify-content:center;margin-bottom:14px}
+  .qdots i{width:10px;height:10px;border-radius:50%;background:var(--line);display:block;transition:all .2s}
+  .qdots i.done{background:var(--green)}
+  .qdots i.now{background:var(--navy);transform:scale(1.4)}
+  .qhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px}
+  .timerRing{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;border:3px solid var(--green);color:var(--green);flex-shrink:0;transition:border-color .3s,color .3s}
+  .timerRing.warn{border-color:var(--amber);color:var(--amber)}
+  .timerRing.danger{border-color:var(--red);color:var(--red);animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+  .qopt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:15px 16px;margin:10px 0;border:2px solid var(--line);border-radius:14px;background:#fff;font:inherit;font-size:16px;cursor:pointer;color:var(--ink);transition:border-color .15s,background .15s}
+  .qopt:hover:not(:disabled){border-color:var(--navy);background:var(--blue-bg)}
+  .qopt:active:not(:disabled){transform:scale(.98)}
+  .qopt:disabled{cursor:default}
+  .qletter{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--bg);border:2px solid var(--line);font-weight:800;flex-shrink:0;font-size:14px;transition:all .15s}
+  .qopt.right{border-color:var(--green);background:var(--green-bg)}
+  .qopt.right .qletter{background:var(--green);border-color:var(--green);color:#fff}
+  .qopt.wrong{border-color:var(--red);background:var(--red-bg)}
+  .qopt.wrong .qletter{background:var(--red);border-color:var(--red);color:#fff}
+  .fbBanner{display:flex;align-items:flex-start;gap:12px;padding:16px;border-radius:14px;margin-top:14px}
+  .fbBanner .fbIcon{font-size:26px;flex-shrink:0;line-height:1}
   .exam input.ans{width:100%;margin:5px 0;padding:11px 12px;font-size:16px}
   .exam textarea.ans{font-size:16px;min-height:90px}
   .result{text-align:center;padding:28px 18px;border-radius:16px}
@@ -2189,12 +2211,15 @@ function dailyJoin(){
   const box = $('dailyBox');
   // Login is now just the Employee ID, matched against the imported staff roster — no name typing, no PIN,
   // no outlet picker. The roster already knows who they are and which outlet they belong to.
-  box.innerHTML = langSwitcher() + `<h2>${t('join')}</h2>
-    <p class="note">${t('sub')}</p>
-    <label class="f" for="jEmpId">${t('empId')}</label>
-    <input id="jEmpId" inputmode="numeric" style="width:100%" placeholder="e.g. 245" autocomplete="off">
-    <p class="note err hidden" id="jErr"></p>
-    <div class="row" style="margin-top:12px"><button class="btn primary" id="jGo">${t('go')}</button></div>`;
+  box.innerHTML = langSwitcher() + `<div class="qcard" style="text-align:center">
+      <div style="font-size:40px;line-height:1">📋</div>
+      <h2 style="margin:8px 0 2px">${t('join')}</h2>
+      <p class="note" style="max-width:320px;margin:0 auto 16px">${t('sub')}</p>
+      <label class="f" for="jEmpId" style="text-align:left">${t('empId')}</label>
+      <input id="jEmpId" inputmode="numeric" style="width:100%;font-size:22px;text-align:center;letter-spacing:1px;padding:14px" placeholder="e.g. 245" autocomplete="off">
+      <p class="note err hidden" id="jErr"></p>
+      <button class="btn primary" id="jGo" style="width:100%;margin-top:14px;padding:14px;font-size:16px;border-radius:12px">${t('go')}</button>
+    </div>`;
   bindLangSwitcher(dailyJoin);
   $('jEmpId').focus();
   const err = m=>{ $('jErr').textContent=m; $('jErr').classList.remove('hidden'); };
@@ -2238,13 +2263,19 @@ async function dailyPlay(){
   const mine = (me.days||{})[today] || [];
   if (mine.length >= qs.length) return dailyDone();
   const k = mine.length, q = allQuestions()[qs[k]], lq = localizedQ(q);
-  box.innerHTML = langSwitcher() + `<div class="row" style="justify-content:space-between"><span class="qnum">Question ${k+1} of ${qs.length} · today</span><a href="#" id="notMe" class="note">${t('notMe')} ${esc(me.name.split(' ')[0])}?</a></div>
-    <div class="bar"><i style="width:${Math.round(k/qs.length*100)}%"></i></div>
+  const dots = Array.from({length:qs.length}, (_,i)=>`<i class="${i<k?'done':i===k?'now':''}"></i>`).join('');
+  box.innerHTML = langSwitcher() + `<div class="qcard">
+    <div class="qdots">${dots}</div>
+    <div class="qhead">
+      <div><span class="qnum" style="margin:0">Question ${k+1} of ${qs.length}</span><div class="note" style="margin:0">Tap an answer below — you have 10 seconds</div></div>
+      <div class="timerRing" id="qTimer">10</div>
+    </div>
     ${q.image?`<img class="qimg" src="${esc(q.image)}" alt="">`:''}${q.imgKey?`<img class="qimg" id="dImg" alt="">`:''}
-    <div class="row" style="justify-content:space-between;align-items:center"><div class="qtext" style="margin:0">${esc(lq.text)}</div>
-      <span class="pill s-wait" id="qTimer" style="flex-shrink:0;margin-left:8px">10s</span></div>
-    ${lq.options.map((o,i)=>`<button class="opt" data-i="${i}">${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
-    <div id="dFb"></div>`;
+    <div class="qtext">${esc(lq.text)}</div>
+    ${lq.options.map((o,i)=>`<button class="qopt" data-i="${i}"><span class="qletter">${String.fromCharCode(65+i)}</span><span>${esc(o)}</span></button>`).join('')}
+    <div id="dFb"></div>
+    <div class="row" style="justify-content:center;margin-top:10px"><a href="#" id="notMe" class="note">${t('notMe')} ${esc(me.name.split(' ')[0])}?</a></div>
+    </div>`;
   if (q.imgKey) getImg(q.imgKey).then(src=>{ const el=$('dImg'); if (el && src) el.src = src; });
   bindLangSwitcher(dailyPlay);
   $('notMe').onclick = e=>{ e.preventDefault(); try{ localStorage.removeItem('training_player'); }catch(err){} me=null; dailyJoin(); };
@@ -2254,7 +2285,8 @@ async function dailyPlay(){
   let answered = false, secondsLeft = 10;
   const tick = setInterval(()=>{
     secondsLeft--;
-    const el = $('qTimer'); if (el) el.textContent = Math.max(secondsLeft,0)+'s';
+    const el = $('qTimer');
+    if (el){ el.textContent = Math.max(secondsLeft,0); el.classList.toggle('warn', secondsLeft<=5 && secondsLeft>2); el.classList.toggle('danger', secondsLeft<=2 && secondsLeft>0); }
     if (secondsLeft<=0) clearInterval(tick);
   }, 1000);
   const timeout = setTimeout(()=>finish(null), 10000);
@@ -2262,23 +2294,33 @@ async function dailyPlay(){
   async function finish(pick){
     if (answered) return; answered = true;
     clearInterval(tick); clearTimeout(timeout);
-    box.querySelectorAll('.opt').forEach(x=>x.disabled=true);
+    box.querySelectorAll('.qopt').forEach(x=>x.disabled=true);
     const ok = pick!==null && pick === +q.answer;
     try{
       const fresh = JSON.parse(await kvGet(PLAYER_PREFIX+me.id, true));   // one answer per question, no changing it
       fresh.days = fresh.days||{}; const arr = fresh.days[today] = fresh.days[today]||[];
       if (arr.length === k){ arr.push({ q: qs[k], pick, ok }); await kvSet(PLAYER_PREFIX+me.id, JSON.stringify(fresh)); }
       me = fresh; const i = players.findIndex(p=>p.id===me.id); if (i>=0) players[i]=me;
-    }catch(e){ answered = false; box.querySelectorAll('.opt').forEach(x=>x.disabled=false); toast('Could not save. Check your internet.'); return; }
-    box.querySelectorAll('.opt').forEach(x=>{ const xi=+x.dataset.i; if (xi===+q.answer) x.classList.add('right'); else if (pick!==null && xi===pick) x.classList.add('wrong'); });
+    }catch(e){ answered = false; box.querySelectorAll('.qopt').forEach(x=>x.disabled=false); toast('Could not save. Check your internet.'); return; }
+    box.querySelectorAll('.qopt').forEach(x=>{ const xi=+x.dataset.i; if (xi===+q.answer) x.classList.add('right'); else if (pick!==null && xi===pick) x.classList.add('wrong'); });
+    const icon = pick===null ? '⏱' : (ok ? '✓' : '✗');
+    const bg = pick===null ? 'var(--amber-bg)' : ok ? 'var(--green-bg)' : 'var(--red-bg)';
+    const fg = pick===null ? 'var(--amber)' : ok ? 'var(--green)' : 'var(--red)';
     const msg = pick===null ? t('timeup')+' '+String.fromCharCode(65+ +q.answer)+'. '+esc(lq.options[+q.answer])
       : (ok?t('correct'):t('wrong')+' '+String.fromCharCode(65+ +q.answer)+'. '+esc(lq.options[+q.answer]));
-    $('dFb').innerHTML = `<p style="font-weight:700;color:${pick===null?'var(--amber)':ok?'var(--green)':'var(--red)'}">${msg}</p>
-      ${q.explain?`<p class="note">${esc(q.explain)}</p>`:''}
-      <p class="note">${k+1<qs.length?t('next'):t('score')}</p>`;
-    setTimeout(()=>{ if (!$('dailyView').classList.contains('hidden')) dailyPlay(); }, 4000);
+    $('dFb').innerHTML = `<div class="fbBanner" style="background:${bg};color:${fg}">
+        <div class="fbIcon">${icon}</div>
+        <div><p style="font-weight:700;margin:0">${msg}</p>
+          ${q.explain?`<p class="note" style="color:${fg};opacity:.85">${esc(q.explain)}</p>`:''}
+          <p class="note" style="color:${fg};opacity:.85;font-weight:600;margin-top:6px" id="nextCountdown"></p></div>
+      </div>`;
+    let waitLeft = 4;
+    const setWait = ()=>{ const el = $('nextCountdown'); if (el) el.textContent = (k+1<qs.length?'Next question in '+waitLeft+'...':'Showing your score in '+waitLeft+'...'); };
+    setWait();
+    const waitTick = setInterval(()=>{ waitLeft--; if (waitLeft<=0){ clearInterval(waitTick); return; } setWait(); }, 1000);
+    setTimeout(()=>{ clearInterval(waitTick); if (!$('dailyView').classList.contains('hidden')) dailyPlay(); }, 4000);
   }
-  box.querySelectorAll('.opt').forEach(b=>b.onclick = ()=>finish(+b.dataset.i));
+  box.querySelectorAll('.qopt').forEach(b=>b.onclick = ()=>finish(+b.dataset.i));
 }
 function dailyDone(){
   const mine = me.days[todayStr()] || [], right = mine.filter(a=>a.ok).length;
@@ -2288,7 +2330,7 @@ function dailyDone(){
       <div class="word">${right===mine.length?t('perfect'):right?t('good'):t('luck')}</div>
       <p>${myRow?`${t('youAre')} #${myRow.rank} · ${myRow.score} pts`:''}</p></div>
     <p class="note" style="text-align:center">${t('tomorrow')}</p>
-    <div class="row" style="justify-content:center;margin-top:10px"><button class="btn" id="viewMyAnswers">View my answers</button></div>
+    <div class="row" style="justify-content:center;margin-top:10px"><button class="btn primary" id="viewMyAnswers" style="padding:12px 22px;border-radius:12px">View my answers</button></div>
     <div id="myAnswersBox"></div>`;
   bindLangSwitcher(dailyDone);
   $('viewMyAnswers').onclick = ()=>{ $('viewMyAnswers').remove(); $('myAnswersBox').innerHTML = renderPlayerAnswers(me, todayStr()); };
