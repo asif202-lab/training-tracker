@@ -2599,7 +2599,7 @@ function eventsSectionHtml(title, rows){
     rows.map(h=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)"><b>${esc(h.name)}</b><span class="note">${h.years?h.years+' year'+(h.years>1?'s':''):''} · ${esc(outletName(h.outlet)||h.dept||'-')}</span></div>`).join('');
 }
 function renderAnniversaryPopup(){
-  if (level!=='master' || anniversaryShown || !employees.length) return;
+  if ((level!=='master' && level!=='viewer') || anniversaryShown || !employees.length) return;
   const { birthdays, anniversaries } = todayEvents();
   if (!birthdays.length && !anniversaries.length) return;
   anniversaryShown = true;
@@ -2614,7 +2614,7 @@ function renderAnniversaryPopup(){
 // on the overview all day, even after the popup's been closed and forgotten.
 function renderTodayEventsCard(){
   const box = $('todayEventsBox');
-  if (level!=='master' || !employees.length){ box.classList.add('hidden'); return; }
+  if ((level!=='master' && level!=='viewer') || !employees.length){ box.classList.add('hidden'); return; }
   const { birthdays, anniversaries } = todayEvents();
   box.classList.toggle('hidden', !birthdays.length && !anniversaries.length);
   if (!birthdays.length && !anniversaries.length) return;
