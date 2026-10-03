@@ -2195,21 +2195,23 @@ function dailyJoin(){
   $('jEmpId').focus();
   const err = m=>{ $('jErr').textContent=m; $('jErr').classList.remove('hidden'); };
   const go = async ()=>{
-    const id = $('jEmpId').value.trim();
-    if (!id) return err('Enter your Employee ID.');
+    const typed = $('jEmpId').value.trim();
+    if (!typed) return err('Enter your Employee ID.');
     $('jGo').disabled = true;
     try{
-      // Any ID gets in — the quiz should never block someone from playing. If the ID matches the
-      // staff roster, use the real name/outlet; if not (roster not updated yet, a new hire, a typo
-      // that still gets a result), they still play under whatever ID they typed.
-      const emp = employees.find(e=>e.id===id);
-      let p = players.find(x=>x.id===id);
+      // Any ID gets in — the quiz should never block someone from playing. A leading zero ("045" vs
+      // "45") never breaks the match against the roster — compared with leading zeros stripped, so
+      // either form finds the same person and the same existing player record, never a duplicate.
+      const norm = normEmpId(typed);
+      const emp = employees.find(e=>normEmpId(e.id)===norm);
+      let p = players.find(x=>x.id===typed) || players.find(x=>normEmpId(x.id)===norm);
       if (!p){
+        const id = emp ? emp.id : norm;
         p = { id, name: emp ? emp.name : ('Staff '+id), outlet: emp ? emp.outlet : '', joined:todayStr(), days:{} };
         await kvSet(PLAYER_PREFIX+id, JSON.stringify(p)); players.push(p);
       } else if (emp && (p.name!==emp.name || p.outlet!==emp.outlet)){
         p.name = emp.name; p.outlet = emp.outlet; // keep in sync if the roster changes later
-        await kvSet(PLAYER_PREFIX+id, JSON.stringify(p));
+        await kvSet(PLAYER_PREFIX+p.id, JSON.stringify(p));
       }
       me = p;
       try{ localStorage.setItem('training_player', me.id); }catch(e){}
@@ -2294,10 +2296,12 @@ function dailyDone(){
 // Fixes any player whose name/outlet is stale or missing against the roster — covers people who first
 // played before their roster entry existed, or before an outlet code like SBDG was recognised. Runs
 // automatically every time the quiz panel loads or refreshes, no one needs to log in again for it to fix.
+// "045" and "45" are the same Employee ID — compare with leading zeros stripped everywhere IDs are matched.
+const normEmpId = id => String(id||'').trim().replace(/^0+(?=\d)/, '');
 async function syncPlayersWithRoster(){
   const writes = [];
   players.forEach(p=>{
-    const emp = employees.find(e=>e.id===p.id);
+    const emp = employees.find(e=>normEmpId(e.id)===normEmpId(p.id));
     if (emp && (p.name!==emp.name || p.outlet!==emp.outlet)){
       p.name = emp.name; p.outlet = emp.outlet;
       writes.push(kvSet(PLAYER_PREFIX+p.id, JSON.stringify(p)).catch(()=>{}));
