@@ -1426,10 +1426,14 @@ $('backupBtn').onclick = async ()=>{
 $('viewLinkBtn').onclick = async ()=>{
   $('viewLinkBtn').disabled = true;
   try{
+    // A revoked link leaves an empty record behind rather than a real deletion, so skip anything that
+    // doesn't actually parse into a usable token instead of reusing (or crashing on) a dead one.
     const existing = await kvPrefix(VIEW_PREFIX);
-    let token;
-    if (existing.length){ token = JSON.parse(existing[0]).token; }
-    else{
+    let token = null;
+    for (const raw of existing){
+      try{ const parsed = JSON.parse(raw); if (parsed && parsed.token){ token = parsed.token; break; } }catch(e){}
+    }
+    if (!token){
       token = Date.now().toString(36)+Math.random().toString(36).slice(2,8);
       await kvSet(VIEW_PREFIX+token, JSON.stringify({ token, created:new Date().toISOString() }));
     }
