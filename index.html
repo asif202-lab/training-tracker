@@ -2291,9 +2291,26 @@ function dailyDone(){
 }
 
 // ---- Admin side
+// Fixes any player whose name/outlet is stale or missing against the roster — covers people who first
+// played before their roster entry existed, or before an outlet code like SBDG was recognised. Runs
+// automatically every time the quiz panel loads or refreshes, no one needs to log in again for it to fix.
+async function syncPlayersWithRoster(){
+  const writes = [];
+  players.forEach(p=>{
+    const emp = employees.find(e=>e.id===p.id);
+    if (emp && (p.name!==emp.name || p.outlet!==emp.outlet)){
+      p.name = emp.name; p.outlet = emp.outlet;
+      writes.push(kvSet(PLAYER_PREFIX+p.id, JSON.stringify(p)).catch(()=>{}));
+    }
+  });
+  if (writes.length) await Promise.all(writes);
+  return writes.length;
+}
 async function openQuizAdmin(){
   show('quizView'); $('quizLb').innerHTML = '<p class="note">Loading...</p>';
   try{ await Promise.all([loadQuiz(), loadDishes()]); }catch(e){ $('quizLb').innerHTML = '<p class="note err">Could not load. Check your internet.</p>'; return; }
+  const fixed = await syncPlayersWithRoster();
+  if (fixed) toast(`Updated ${fixed} player name${fixed>1?'s':''} from the roster`);
   const url = location.origin + location.pathname + '?daily';
   $('quizLink').textContent = url;
   $('quizShare').href = 'https://wa.me/?text=' + encodeURIComponent(`Daily quiz is live! 3 quick questions every day. Top 10 on the leaderboard get the bragging rights. Play here: ${url}`);
@@ -2320,6 +2337,7 @@ function bindLbClicks(){
 async function refreshQuizLive(){
   if ($('quizView').classList.contains('hidden')) return;
   try{ await loadQuiz(); }catch(e){ return; }
+  await syncPlayersWithRoster();
   const rows = leaderboard(), today = todayStr();
   const played = players.filter(p=>(p.days||{})[today] && p.days[today].length).length;
   $('quizStats').textContent = `${players.length} staff joined · ${played} played today`;
