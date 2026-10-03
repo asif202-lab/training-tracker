@@ -941,7 +941,7 @@ function renderOverview(){
   $('whoAmI').textContent = level==='master'?'Master access':level==='management'?'Management access':outletName(myOutlet);
   $('backupBtn').classList.toggle('hidden', level!=='master');
   $('viewLinkBtn').classList.toggle('hidden', level!=='master');
-  $('rosterBtn').classList.toggle('hidden', level!=='master' && level!=='viewer');
+  $('rosterBtn').classList.toggle('hidden', level!=='master'); // staff DOB/joining dates — not for the view-only approval link
   renderPending();
   renderAnniversaryPopup();
   renderExamReview();
@@ -2316,6 +2316,7 @@ function renderAnniversaryPopup(){
 /* ============ STAFF ROSTER ============ */
 let rosterParsed = null; // rows awaiting review before import
 async function openRosterAdmin(){
+  if (level==='viewer'){ toast('Staff roster is not shown on this link.'); return; } // DOB/joining dates stay private even if this got triggered some other way
   show('rosterView'); $('pageTitle').textContent = 'Staff roster';
   $('rosterFile').disabled = level!=='master';
   try{ await loadEmployees(); }catch(e){}
