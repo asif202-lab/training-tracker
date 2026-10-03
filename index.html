@@ -734,20 +734,6 @@ function renderProgramBank(){
     catch(e){ toast('Could not delete. Check your internet.'); }
   });
 }
-$('progFile').onchange = async e=>{
-  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  $('progErr').classList.add('hidden');
-  try{
-    const text = await f.text();
-    let p; try{ p = JSON.parse(text); }catch(e){ $('progErr').textContent = 'That file is not valid JSON.'; $('progErr').classList.remove('hidden'); return; }
-    const problem = validateProgram(p);
-    if (problem){ $('progErr').textContent = problem; $('progErr').classList.remove('hidden'); return; }
-    p.uploaded = new Date().toISOString();
-    await kvSet(PROGRAM_PREFIX+p.id, enc(p));
-    await loadPrograms(); toast('Program uploaded: '+p.name); renderProgramBank();
-  }catch(e){ $('progErr').textContent = 'Could not save. Check your internet and try again.'; $('progErr').classList.remove('hidden'); }
-};
-
 /* ============ CALCULATIONS ============ */
 const pad = n => String(n).padStart(2,'0');
 const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
@@ -1129,6 +1115,19 @@ function renderBank(){
     m.querySelector('#mClose').onclick=()=>m.remove();
   });
 }
+$('progFile').onchange = async e=>{
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  $('progErr').classList.add('hidden');
+  try{
+    const text = await f.text();
+    let p; try{ p = JSON.parse(text); }catch(e){ $('progErr').textContent = 'That file is not valid JSON.'; $('progErr').classList.remove('hidden'); return; }
+    const problem = validateProgram(p);
+    if (problem){ $('progErr').textContent = problem; $('progErr').classList.remove('hidden'); return; }
+    p.uploaded = new Date().toISOString();
+    await kvSet(PROGRAM_PREFIX+p.id, enc(p));
+    await loadPrograms(); toast('Program uploaded: '+p.name); renderProgramBank();
+  }catch(e){ $('progErr').textContent = 'Could not save. Check your internet and try again.'; $('progErr').classList.remove('hidden'); }
+};
 $('bankFile').onchange = async e=>{
   const f = e.target.files[0]; if (!f) return;
   $('bankErr').classList.add('hidden');
