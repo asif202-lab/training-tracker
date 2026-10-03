@@ -1469,8 +1469,9 @@ $('viewLinkBtn').onclick = async ()=>{
     const m = modal(`<h2>View-only link</h2>
       <p class="note">Anyone with this link sees the whole dashboard exactly as you do — every trainee, dish, exam and the quiz leaderboard — but every Add, Edit, Upload, Delete and Save control is disabled. Nothing they do can change or break anything.</p>
       <div class="linkbox">${esc(url)}</div>
-      <div class="row" style="margin-top:8px"><button class="btn primary" id="vlCopy">Copy link</button><button class="btn danger" id="vlRevoke">Turn off this link</button></div>`, true);
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="vlCopy">Copy link</button><button class="btn danger" id="vlRevoke">Turn off this link</button><button class="btn" id="vlClose">Close</button></div>`, true);
     m.querySelector('#vlCopy').onclick = async ()=>{ try{ await navigator.clipboard.writeText(url); toast('Link copied'); }catch(e){ prompt('Copy this link:', url); } };
+    m.querySelector('#vlClose').onclick = ()=>m.remove();
     m.querySelector('#vlRevoke').onclick = async ()=>{
       if (!confirm('Turn off the view-only link? Anyone using it will be logged out immediately.')) return;
       try{ await kvSet(VIEW_PREFIX+token, ''); toast('Link turned off'); m.remove(); }catch(e){ toast('Could not save. Check your internet.'); }
@@ -2078,21 +2079,45 @@ function mcq(q, right, wrongs, rnd, extra){
 // a text question becomes an MCQ using other short answers from the same exam as the wrong options, so
 // nothing needs to be authored twice. List and manual questions aren't suited to a quick multiple-choice
 // quiz, so those are left for the exam itself.
+// Brand of a piece of text — an exam title, a dish's brand field, a department string — reusing the same
+// LB/SB/TRD recognition built for outlet matching. Returns null for brand-free content (e.g. "General
+// Information Examination"), which is treated as open to everyone, same as the user explicitly asked for
+// general-knowledge questions to stay available regardless of brand.
+function detectBrand(text){
+  const t = norm(text);
+  if (!t) return null;
+  if (t.includes('lbkk') || t.includes('little bangkok')) return 'LB';
+  if (t.includes('super bowl')) return 'SB';
+  if (t.includes('red door')) return 'TRD';
+  for (const b of OUTLET_BRANDS){
+    const bLabel = b.brand==='little bangkok'?'LB':b.brand==='super bowl'?'SB':'TRD';
+    if (t.startsWith(b.brand)) return bLabel;
+    if (b.codes.some(c=>t.startsWith(c))) return bLabel;
+  }
+  return null;
+}
+// A player's brand comes from their roster department text first (it has the clearest signal, e.g.
+// "LBJLT Production"), falling back to their resolved outlet's name if department text didn't resolve.
+function playerBrand(playerId){
+  const emp = employees.find(e=>e.id===playerId);
+  if (!emp) return null;
+  return detectBrand(emp.dept) || detectBrand(outletName(emp.outlet));
+}
 function examQuestions(){
   const out = [];
   exams.filter(ex=>ex.active!==false).forEach(ex=>{
-    const rnd = seeded(hashStr(ex.id));
+    const rnd = seeded(hashStr(ex.id)), brand = detectBrand(ex.title);
     const textAnswers = [...new Set(ex.questions.filter(q=>q.type==='text' && Array.isArray(q.answers) && q.answers.length).map(q=>variants(q.answers)[0]))];
     ex.questions.forEach(q=>{
       if (q.type==='mcq' && Array.isArray(q.options) && q.answer!==undefined && q.options[q.answer]){
-        out.push({ q:q.q, options:q.options, answer:q.answer, explain:q.explain, category:ex.title });
+        out.push({ q:q.q, options:q.options, answer:q.answer, explain:q.explain, category:ex.title, brand });
       } else if (q.type==='truefalse' && typeof q.answer==='boolean'){
         const opts = shuffleSeeded(['True','False'], rnd), right = q.answer?'True':'False';
-        out.push({ q:q.q, options:opts, answer:opts.indexOf(right), explain:q.explain, category:ex.title });
+        out.push({ q:q.q, options:opts, answer:opts.indexOf(right), explain:q.explain, category:ex.title, brand });
       } else if (q.type==='text' && Array.isArray(q.answers) && q.answers.length){
         const right = variants(q.answers)[0];
         const wrongs = shuffleSeeded(textAnswers.filter(a=>norm(a)!==norm(right)), rnd).slice(0,3);
-        if (wrongs.length>=2) out.push(mcq(q.q, right, wrongs, rnd, { explain:q.explain, category:ex.title }));
+        if (wrongs.length>=2) out.push(mcq(q.q, right, wrongs, rnd, { explain:q.explain, category:ex.title, brand }));
       }
     });
   });
@@ -2107,17 +2132,17 @@ function dishQuestions(){
   list.forEach(d=>{
     const rnd = seeded(hashStr(d.id)), mine = d.ingredients.map(i=>i.name), finalImg = imgKey(d.id, d.stepCount);
     const notMine = shuffleSeeded([...allIng, ...extraIng].filter(x=>!mine.some(m=>norm(m)===norm(x))), rnd);
-    const cat = d.category || 'Dish Knowledge';
-    if (mine.length >= 3) out.push(mcq(`Which of these is NOT in ${d.name}?`, notMine[0], shuffleSeeded(mine, rnd), rnd, { imgKey:finalImg, explain:`${d.name} has: ${mine.join(', ')}.`, category:cat }));
+    const cat = d.category || 'Dish Knowledge', brand = detectBrand(d.brand);
+    if (mine.length >= 3) out.push(mcq(`Which of these is NOT in ${d.name}?`, notMine[0], shuffleSeeded(mine, rnd), rnd, { imgKey:finalImg, explain:`${d.name} has: ${mine.join(', ')}.`, category:cat, brand }));
     const seq = d.steps.flatMap(s=>s.adds);
     if (seq.length >= 5){
       const p = Math.floor(rnd()*(seq.length-1)), right = seq[p+1];
-      out.push(mcq(`In ${d.name}, what goes in right after ${seq[p]}?`, right, shuffleSeeded(seq.filter(x=>x!==right && x!==seq[p]), rnd), rnd, { imgKey:imgKey(d.id, Math.min(d.stepCount, p+2)), explain:`Order: ${seq.join(' → ')}.`, category:cat }));
+      out.push(mcq(`In ${d.name}, what goes in right after ${seq[p]}?`, right, shuffleSeeded(seq.filter(x=>x!==right && x!==seq[p]), rnd), rnd, { imgKey:imgKey(d.id, Math.min(d.stepCount, p+2)), explain:`Order: ${seq.join(' → ')}.`, category:cat, brand }));
     }
     const vessels = shuffleSeeded([...new Set([...list.map(x=>x.vessel.name), ...extraVessels])].filter(v=>norm(v)!==norm(d.vessel.name)), rnd);
-    out.push(mcq(`What is ${d.name} served in?`, d.vessel.name, vessels, rnd, { imgKey:finalImg, category:cat }));
+    out.push(mcq(`What is ${d.name} served in?`, d.vessel.name, vessels, rnd, { imgKey:finalImg, category:cat, brand }));
     const names = shuffleSeeded([...new Set([...list.map(x=>x.name), ...extraDishes])].filter(n=>n!==d.name), rnd);
-    out.push(mcq('Which dish is this?', d.name, names, rnd, { imgKey:finalImg, category:cat }));
+    out.push(mcq('Which dish is this?', d.name, names, rnd, { imgKey:finalImg, category:cat, brand }));
   });
   return out;
 }
@@ -2140,13 +2165,19 @@ function allQuestions(){
   return [...pool, ...examQuestions(), ...dishQuestions()];
 }
 function todaysQuestions(playerId){
-  const n = allQuestions().length;
+  // A brand-tagged question (LB/SB/TRD) only goes to staff from that same brand. Brand-free questions
+  // (General Information, anything with no brand detected) go to everyone — this is what keeps general
+  // knowledge available regardless of brand while keeping menu-knowledge scoped to the right brand.
+  const brand = playerId ? playerBrand(playerId) : null;
+  const all = allQuestions();
+  const pool = all.map((q,i)=>({q,i})).filter(x=>!brand || !x.q.brand || x.q.brand===brand);
+  const n = pool.length;
   if (n < PER_DAY) return [];
   const baseSeed = (qPool && qPool.seed) || 7;
   const rnd = seeded(playerId ? baseSeed + hashStr(playerId) : baseSeed), order = [...Array(n).keys()];
   for (let i=n-1;i>0;i--){ const j = Math.floor(rnd()*(i+1)); [order[i],order[j]] = [order[j],order[i]]; }
   const d = Math.max(0, Math.floor((parseDate(todayStr()) - parseDate(qCfg.start)) / 86400000));
-  return Array.from({length:PER_DAY}, (_,k)=> order[(d*PER_DAY + k) % n]);
+  return Array.from({length:PER_DAY}, (_,k)=> pool[order[(d*PER_DAY + k) % n]].i);
 }
 function playerScore(p){
   let score=0, days=0;
@@ -2316,7 +2347,10 @@ async function dailyPlay(){
     try{
       const fresh = JSON.parse(await kvGet(PLAYER_PREFIX+me.id, true));   // one answer per question, no changing it
       fresh.days = fresh.days||{}; const arr = fresh.days[today] = fresh.days[today]||[];
-      if (arr.length === k){ arr.push({ q: qs[k], pick, ok }); await kvSet(PLAYER_PREFIX+me.id, JSON.stringify(fresh)); }
+      // Saves the actual question (text, options, correct answer, category) alongside the index — not just
+      // the index. The index alone isn't reliable long-term: uploading a new exam re-sorts and shifts every
+      // later question's position, which silently breaks old answer records if only the position was kept.
+      if (arr.length === k){ arr.push({ q: qs[k], text:q.q, options:q.options, answer:q.answer, category:q.category||'General Knowledge', pick, ok }); await kvSet(PLAYER_PREFIX+me.id, JSON.stringify(fresh)); }
       me = fresh; const i = players.findIndex(p=>p.id===me.id); if (i>=0) players[i]=me;
     }catch(e){ answered = false; box.querySelectorAll('.qopt').forEach(x=>x.disabled=false); toast('Could not save. Check your internet.'); return; }
     box.querySelectorAll('.qopt').forEach(x=>{ const xi=+x.dataset.i; if (xi===+q.answer) x.classList.add('right'); else if (pick!==null && xi===pick) x.classList.add('wrong'); });
@@ -2487,10 +2521,18 @@ function renderParticipation(){
 document.querySelectorAll('[data-period]').forEach(b=>b.onclick=()=>{ partPeriod=b.dataset.period; partOutlet=null; renderParticipation(); });
 
 /* ---- Per-player result detail: answers + strength/weakness by topic (point 3 & 4) ---- */
+// Prefer the question snapshot saved with the answer itself (text/options/answer/category) — reliable no
+// matter what's since been uploaded. Only answers saved before this fix lack a snapshot; for those alone,
+// fall back to looking the index up in the current question list, which may be wrong by now if the exam
+// bank has changed since — there's no way to recover what was actually asked for those older records.
+function resolveAnswer(a){
+  if (a.text && a.options) return { q:a.text, options:a.options, answer:a.answer, category:a.category||'General Knowledge' };
+  return allQuestions()[a.q] || null;
+}
 function categoryProfile(player){
   const tally = {};
   Object.values(player.days||{}).forEach(dayArr=>dayArr.forEach(a=>{
-    const q = allQuestions()[a.q]; if (!q) return;
+    const q = resolveAnswer(a); if (!q) return;
     const cat = q.category || 'General Knowledge';
     const s = tally[cat] = tally[cat] || {right:0,total:0};
     s.total++; if (a.ok) s.right++;
@@ -2498,10 +2540,10 @@ function categoryProfile(player){
   return Object.entries(tally).map(([cat,s])=>({cat, right:s.right, total:s.total, pct:Math.round(s.right/s.total*100)})).sort((a,b)=>a.pct-b.pct);
 }
 function renderPlayerAnswers(player, dateStr){
-  const dayArr = (player.days||{})[dateStr] || [], qs = allQuestions();
+  const dayArr = (player.days||{})[dateStr] || [];
   if (!dayArr.length) return '<p class="note">No answers recorded for this day.</p>';
   return dayArr.map((a,i)=>{
-    const q = qs[a.q]; if (!q) return '';
+    const q = resolveAnswer(a); if (!q) return '';
     const picked = (a.pick!==null && a.pick!==undefined) ? q.options[a.pick] : '(no answer — time ran out)';
     return `<div class="rev"><b>Q${i+1}. ${esc(q.q)}</b> <span class="note">(${esc(q.category||'General Knowledge')})</span>
       <div class="ta ${a.ok?'ok':'no'}">${esc(picked)}</div>
