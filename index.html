@@ -273,6 +273,7 @@
         <p class="note" style="margin:0 0 10px"><span id="whoAmI"></span> · <a href="#" id="logout">Log out</a></p>
         <div class="card hidden" id="pendingBox" style="border-left:4px solid var(--navy);margin-bottom:10px"></div>
         <div class="card hidden" id="examReviewBox" style="border-left:4px solid var(--amber);margin-bottom:10px"></div>
+        <div class="card hidden" id="todayEventsBox" style="border-left:4px solid var(--navy);margin-bottom:10px"></div>
         <div class="alerts" id="alerts"></div>
         <div class="sgrid" id="desigBoxes"></div>
         <div class="bgrid" id="brandBoxes"></div>
@@ -294,23 +295,23 @@
         <div class="row"><a class="btn primary" id="quizShare" target="_blank" style="text-decoration:none">Share on WhatsApp</a><button class="btn" id="quizCopy">Copy link</button></div>
         <p class="note" id="quizStats" style="margin-top:10px"></p>
       </div>
-      <div class="card"><h2>Leaderboard</h2><div id="quizLb"></div></div>
-      <div class="card"><h2>Today's questions</h2><div id="quizToday"></div></div>
+      <div class="card"><h2>Leaderboard</h2><div id="quizLb"></div><p class="note">Tap a name to see their answers and strong/weak topics.</p></div>
       <div class="card">
-        <h2>Participation</h2>
+        <h2>Participation by outlet</h2>
+        <div class="row" style="margin-bottom:8px"><button class="btn small" data-period="day">Day</button><button class="btn small" data-period="week">Week</button><button class="btn small" data-period="month">Month</button></div>
         <p class="note" id="partSummary"></p>
         <div class="tablewrap"><table>
-          <thead><tr><th>Outlet</th><th>Staff</th><th>Played today</th><th>Played 0 days this week</th></tr></thead>
+          <thead><tr><th>Outlet</th><th>Staff</th><th>Participation</th></tr></thead>
           <tbody id="partByOutlet"></tbody>
         </table></div>
-        <h3 style="margin-top:14px">Hasn't played today (<span id="nonTodayCount">0</span>)</h3>
-        <p class="note" style="margin-top:0">For following up directly — a weekly miss matters more than a single day, so anyone also shown in red below has played zero days in the last 7.</p>
-        <input id="nonTodaySearch" style="width:100%;margin-bottom:6px" placeholder="Search name, ID or outlet...">
+        <h3 style="margin-top:14px" id="partEmpTitle">Tap an outlet above to see its staff</h3>
+        <input id="nonTodaySearch" style="width:100%;margin-bottom:6px" placeholder="Search name or ID...">
         <div class="tablewrap"><table>
-          <thead><tr><th>Name</th><th>ID</th><th>Outlet</th><th>Days played (last 7)</th></tr></thead>
+          <thead><tr><th>Name</th><th>ID</th><th id="partDaysHeader">Participated</th></tr></thead>
           <tbody id="nonTodayTable"></tbody>
         </table></div>
       </div>
+      <div class="card hidden" id="playerDetailBox"></div>
       <div class="card" id="quizPoolCard">
         <h2>Question pool</h2>
         <p class="note" id="quizPoolInfo"></p>
@@ -990,6 +991,7 @@ function renderOverview(){
   $('rosterBtn').classList.toggle('hidden', level!=='master'); // staff DOB/joining dates — not for the view-only approval link
   renderPending();
   renderAnniversaryPopup();
+  renderTodayEventsCard();
   renderExamReview();
   startLive(refreshOverviewLive, 20000); // keeps this report live without a manual reload
   const pool = visible().filter(t=>!t.archived);
@@ -2051,14 +2053,14 @@ function examQuestions(){
     const textAnswers = [...new Set(ex.questions.filter(q=>q.type==='text' && Array.isArray(q.answers) && q.answers.length).map(q=>variants(q.answers)[0]))];
     ex.questions.forEach(q=>{
       if (q.type==='mcq' && Array.isArray(q.options) && q.answer!==undefined && q.options[q.answer]){
-        out.push({ q:q.q, options:q.options, answer:q.answer, explain:q.explain });
+        out.push({ q:q.q, options:q.options, answer:q.answer, explain:q.explain, category:ex.title });
       } else if (q.type==='truefalse' && typeof q.answer==='boolean'){
         const opts = shuffleSeeded(['True','False'], rnd), right = q.answer?'True':'False';
-        out.push({ q:q.q, options:opts, answer:opts.indexOf(right), explain:q.explain });
+        out.push({ q:q.q, options:opts, answer:opts.indexOf(right), explain:q.explain, category:ex.title });
       } else if (q.type==='text' && Array.isArray(q.answers) && q.answers.length){
         const right = variants(q.answers)[0];
         const wrongs = shuffleSeeded(textAnswers.filter(a=>norm(a)!==norm(right)), rnd).slice(0,3);
-        if (wrongs.length>=2) out.push(mcq(q.q, right, wrongs, rnd, { explain:q.explain }));
+        if (wrongs.length>=2) out.push(mcq(q.q, right, wrongs, rnd, { explain:q.explain, category:ex.title }));
       }
     });
   });
@@ -2073,16 +2075,17 @@ function dishQuestions(){
   list.forEach(d=>{
     const rnd = seeded(hashStr(d.id)), mine = d.ingredients.map(i=>i.name), finalImg = imgKey(d.id, d.stepCount);
     const notMine = shuffleSeeded([...allIng, ...extraIng].filter(x=>!mine.some(m=>norm(m)===norm(x))), rnd);
-    if (mine.length >= 3) out.push(mcq(`Which of these is NOT in ${d.name}?`, notMine[0], shuffleSeeded(mine, rnd), rnd, { imgKey:finalImg, explain:`${d.name} has: ${mine.join(', ')}.` }));
+    const cat = d.category || 'Dish Knowledge';
+    if (mine.length >= 3) out.push(mcq(`Which of these is NOT in ${d.name}?`, notMine[0], shuffleSeeded(mine, rnd), rnd, { imgKey:finalImg, explain:`${d.name} has: ${mine.join(', ')}.`, category:cat }));
     const seq = d.steps.flatMap(s=>s.adds);
     if (seq.length >= 5){
       const p = Math.floor(rnd()*(seq.length-1)), right = seq[p+1];
-      out.push(mcq(`In ${d.name}, what goes in right after ${seq[p]}?`, right, shuffleSeeded(seq.filter(x=>x!==right && x!==seq[p]), rnd), rnd, { imgKey:imgKey(d.id, Math.min(d.stepCount, p+2)), explain:`Order: ${seq.join(' → ')}.` }));
+      out.push(mcq(`In ${d.name}, what goes in right after ${seq[p]}?`, right, shuffleSeeded(seq.filter(x=>x!==right && x!==seq[p]), rnd), rnd, { imgKey:imgKey(d.id, Math.min(d.stepCount, p+2)), explain:`Order: ${seq.join(' → ')}.`, category:cat }));
     }
     const vessels = shuffleSeeded([...new Set([...list.map(x=>x.vessel.name), ...extraVessels])].filter(v=>norm(v)!==norm(d.vessel.name)), rnd);
-    out.push(mcq(`What is ${d.name} served in?`, d.vessel.name, vessels, rnd, { imgKey:finalImg }));
+    out.push(mcq(`What is ${d.name} served in?`, d.vessel.name, vessels, rnd, { imgKey:finalImg, category:cat }));
     const names = shuffleSeeded([...new Set([...list.map(x=>x.name), ...extraDishes])].filter(n=>n!==d.name), rnd);
-    out.push(mcq('Which dish is this?', d.name, names, rnd, { imgKey:finalImg }));
+    out.push(mcq('Which dish is this?', d.name, names, rnd, { imgKey:finalImg, category:cat }));
   });
   return out;
 }
@@ -2100,7 +2103,10 @@ async function loadQuiz(){
 function seeded(seed){ return ()=>{ seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 // Each staff member gets their own shuffled order through the pool (seeded by their id), so no two people
 // get the same 3 questions on the same day, but the pool is still gone through fully before any repeat.
-function allQuestions(){ return [...((qPool && qPool.questions) || []), ...examQuestions(), ...dishQuestions()]; }
+function allQuestions(){
+  const pool = ((qPool && qPool.questions) || []).map(q=>({ ...q, category: q.category || 'General Knowledge' }));
+  return [...pool, ...examQuestions(), ...dishQuestions()];
+}
 function todaysQuestions(playerId){
   const n = allQuestions().length;
   if (n < PER_DAY) return [];
@@ -2122,9 +2128,9 @@ function leaderboard(){
   rows.forEach((r,i)=>{ if (!prev || r.score!==prev.score || r.days!==prev.days) rank = i+1; r.rank = rank; prev = r; });
   return rows;
 }
-function lbTable(rows, meId){
+function lbTable(rows, meId, clickable){
   const top = rows.slice(0,10), me = rows.find(r=>r.p.id===meId);
-  const tr = r=>`<tr class="${r.p.id===meId?'me':''} ${r.rank<=3?'top'+r.rank:''}"><td class="rk">${r.rank}</td><td>${esc(r.p.name)}<div class="note" style="margin:0">${esc(outletName(r.p.outlet))}</div></td><td style="text-align:right"><b>${r.score}</b> pts</td></tr>`;
+  const tr = r=>`<tr class="${r.p.id===meId?'me':''} ${r.rank<=3?'top'+r.rank:''}" ${clickable?`data-pid="${esc(r.p.id)}" style="cursor:pointer"`:''}><td class="rk">${r.rank}</td><td>${esc(r.p.name)}<div class="note" style="margin:0">${esc(outletName(r.p.outlet))}</div></td><td style="text-align:right"><b>${r.score}</b> pts</td></tr>`;
   if (!rows.length) return '<p class="note">No answers yet this season. Be the first!</p>';
   return `<table class="lb">${top.map(tr).join('')}${me && me.rank>10 ? '<tr><td colspan="3" class="note" style="text-align:center">...</td></tr>'+tr(me) : ''}</table>
     <p class="note">1 point per correct answer. Season started ${fmtDate(qCfg.start)}.</p>`;
@@ -2137,23 +2143,23 @@ const LANGS = { en:'English', tl:'Tagalog', hi:'हिन्दी', my:'မြ�
 const T = {
   en:{ join:'Join the daily quiz', sub:'3 quick questions every day. Get them right to climb the team leaderboard.', new:"I'm new here", old:"I've joined before",
     name:'Your full name', empId:'Your Employee ID', outlet:'Your outlet', pin:'Choose a 4-digit PIN (so only you can play as you)', pinOld:'Your PIN', who:'Your name', go:'Continue',
-    notMe:'Not', correct:'Correct! +1 point', wrong:'Not quite. The right answer is', next:'Next question in a moment...', score:'Showing your score in a moment...',
+    notMe:'Not', correct:'Correct! +1 point', wrong:'Not quite. The right answer is', timeup:"Time's up! The right answer was", next:'Next question in a moment...', score:'Showing your score in a moment...',
     perfect:'Perfect day!', good:'Good try!', luck:'Better luck tomorrow!', tomorrow:'New questions tomorrow. Come back every day to keep climbing.', youAre:'You are' },
   tl:{ join:'Sumali sa daily quiz', sub:'3 mabilis na tanong araw-araw. Sagutin nang tama para umangat sa leaderboard.', new:'Bago lang ako dito', old:'Nakasali na ako dati',
     name:'Buong pangalan', empId:'Iyong Employee ID', outlet:'Iyong outlet', pin:'Pumili ng 4-digit na PIN (para ikaw lang ang makapaglaro bilang ikaw)', pinOld:'Iyong PIN', who:'Iyong pangalan', go:'Magpatuloy',
-    notMe:'Hindi', correct:'Tama! +1 puntos', wrong:'Mali. Ang tamang sagot ay', next:'Susunod na tanong sandali lang...', score:'Ipapakita ang iyong score sandali lang...',
+    notMe:'Hindi', correct:'Tama! +1 puntos', wrong:'Mali. Ang tamang sagot ay', timeup:'Ubos na ang oras! Ang tamang sagot ay', next:'Susunod na tanong sandali lang...', score:'Ipapakita ang iyong score sandali lang...',
     perfect:'Perpektong araw!', good:'Magandang subok!', luck:'Sana sa susunod!', tomorrow:'Bagong tanong bukas. Bumalik araw-araw para umangat.', youAre:'Ikaw ay' },
   hi:{ join:'डेली क्विज़ में शामिल हों', sub:'हर दिन 3 आसान सवाल। सही जवाब देकर टीम लीडरबोर्ड में आगे बढ़ें।', new:'मैं यहाँ नया हूँ', old:'मैं पहले शामिल हो चुका/चुकी हूँ',
     name:'आपका पूरा नाम', empId:'आपका एम्प्लॉई आईडी', outlet:'आपका आउटलेट', pin:'4 अंकों का पिन चुनें (ताकि सिर्फ आप ही खेल सकें)', pinOld:'आपका पिन', who:'आपका नाम', go:'जारी रखें',
-    notMe:'यह मैं नहीं हूँ', correct:'सही! +1 अंक', wrong:'गलत। सही जवाब है', next:'अगला सवाल कुछ ही देर में...', score:'आपका स्कोर कुछ ही देर में...',
+    notMe:'यह मैं नहीं हूँ', correct:'सही! +1 अंक', wrong:'गलत। सही जवाब है', timeup:'समय समाप्त! सही जवाब था', next:'अगला सवाल कुछ ही देर में...', score:'आपका स्कोर कुछ ही देर में...',
     perfect:'शानदार दिन!', good:'अच्छी कोशिश!', luck:'कल फिर कोशिश करें!', tomorrow:'कल नए सवाल आएंगे। रोज़ आकर आगे बढ़ते रहें।', youAre:'आप हैं' },
   my:{ join:'နေ့စဉ် ပဟေဠိတွင် ပါဝင်ပါ', sub:'နေ့စဉ် မေးခွန်း ၃ ခု။ မှန်ကန်စွာဖြေပြီး အဖွဲ့ ဇယားတွင် အမှတ်တက်ပါ။', new:'ကျွန်တော်/မ ဒီမှာ အသစ်ပါ', old:'ကျွန်တော်/မ ယခင်က ဝင်ပြီးပါပြီ',
     name:'အမည်အပြည့်အစုံ', empId:'သင့် ဝန်ထမ်း အိုင်ဒီ', outlet:'သင့် ဆိုင်ခွဲ', pin:'ဂဏန်း ၄ လုံး PIN ရွေးပါ', pinOld:'သင့် PIN', who:'သင့်အမည်', go:'ဆက်လက်လုပ်ဆောင်ပါ',
-    notMe:'ကျွန်တော်/မ မဟုတ်ပါ', correct:'မှန်ပါသည်! +1 မှတ်', wrong:'မမှန်ပါ။ မှန်ကန်သော အဖြေမှာ', next:'နောက်မေးခွန်း မကြာမီ...', score:'သင့်ရမှတ် မကြာမီ...',
+    notMe:'ကျွန်တော်/မ မဟုတ်ပါ', correct:'မှန်ပါသည်! +1 မှတ်', wrong:'မမှန်ပါ။ မှန်ကန်သော အဖြေမှာ', timeup:'အချိန်ကုန်ပါပြီ! မှန်ကန်သောအဖြေမှာ', next:'နောက်မေးခွန်း မကြာမီ...', score:'သင့်ရမှတ် မကြာမီ...',
     perfect:'အကောင်းဆုံးနေ့!', good:'ကြိုးစားမှု ကောင်းပါတယ်!', luck:'မနက်ဖြန် ထပ်ကြိုးစားပါ!', tomorrow:'မနက်ဖြန် မေးခွန်းအသစ်များ ရှိပါမည်။', youAre:'သင်သည်' },
   ne:{ join:'दैनिक क्विजमा सामेल हुनुहोस्', sub:'हरेक दिन ३ छिटो प्रश्न। सही उत्तर दिएर टिम लिडरबोर्डमा माथि जानुहोस्।', new:'म यहाँ नयाँ हुँ', old:'म पहिले नै सामेल भइसकेको छु',
     name:'तपाईंको पूरा नाम', empId:'तपाईंको कर्मचारी आईडी', outlet:'तपाईंको आउटलेट', pin:'४ अंकको PIN छान्नुहोस्', pinOld:'तपाईंको PIN', who:'तपाईंको नाम', go:'अगाडि बढ्नुहोस्',
-    notMe:'म होइन', correct:'सही! +१ अंक', wrong:'गलत। सही उत्तर हो', next:'अर्को प्रश्न केही क्षणमा...', score:'तपाईंको स्कोर केही क्षणमा...',
+    notMe:'म होइन', correct:'सही! +१ अंक', wrong:'गलत। सही उत्तर हो', timeup:'समय सकियो! सही उत्तर थियो', next:'अर्को प्रश्न केही क्षणमा...', score:'तपाईंको स्कोर केही क्षणमा...',
     perfect:'उत्कृष्ट दिन!', good:'राम्रो प्रयास!', luck:'भोलि फेरि प्रयास गर्नुहोस्!', tomorrow:'भोलि नयाँ प्रश्नहरू। हरेक दिन फर्किएर माथि जानुहोस्।', youAre:'तपाईं हुनुहुन्छ' }
 };
 let curLang = (()=>{ try{ return localStorage.getItem('training_lang') || 'en'; }catch(e){ return 'en'; } })();
@@ -2229,27 +2235,44 @@ async function dailyPlay(){
   box.innerHTML = langSwitcher() + `<div class="row" style="justify-content:space-between"><span class="qnum">Question ${k+1} of ${qs.length} · today</span><a href="#" id="notMe" class="note">${t('notMe')} ${esc(me.name.split(' ')[0])}?</a></div>
     <div class="bar"><i style="width:${Math.round(k/qs.length*100)}%"></i></div>
     ${q.image?`<img class="qimg" src="${esc(q.image)}" alt="">`:''}${q.imgKey?`<img class="qimg" id="dImg" alt="">`:''}
-    <div class="qtext">${esc(lq.text)}</div>
+    <div class="row" style="justify-content:space-between;align-items:center"><div class="qtext" style="margin:0">${esc(lq.text)}</div>
+      <span class="pill s-wait" id="qTimer" style="flex-shrink:0;margin-left:8px">10s</span></div>
     ${lq.options.map((o,i)=>`<button class="opt" data-i="${i}">${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     <div id="dFb"></div>`;
   if (q.imgKey) getImg(q.imgKey).then(src=>{ const el=$('dImg'); if (el && src) el.src = src; });
   bindLangSwitcher(dailyPlay);
   $('notMe').onclick = e=>{ e.preventDefault(); try{ localStorage.removeItem('training_player'); }catch(err){} me=null; dailyJoin(); };
-  box.querySelectorAll('.opt').forEach(b=>b.onclick = async ()=>{
+
+  // 10 seconds to answer. Answering manually and timing out both go through finish() so the save logic
+  // (and the "one answer per question" guard) only lives in one place.
+  let answered = false, secondsLeft = 10;
+  const tick = setInterval(()=>{
+    secondsLeft--;
+    const el = $('qTimer'); if (el) el.textContent = Math.max(secondsLeft,0)+'s';
+    if (secondsLeft<=0) clearInterval(tick);
+  }, 1000);
+  const timeout = setTimeout(()=>finish(null), 10000);
+
+  async function finish(pick){
+    if (answered) return; answered = true;
+    clearInterval(tick); clearTimeout(timeout);
     box.querySelectorAll('.opt').forEach(x=>x.disabled=true);
-    const pick = +b.dataset.i, ok = pick === +q.answer;
+    const ok = pick!==null && pick === +q.answer;
     try{
       const fresh = JSON.parse(await kvGet(PLAYER_PREFIX+me.id, true));   // one answer per question, no changing it
       fresh.days = fresh.days||{}; const arr = fresh.days[today] = fresh.days[today]||[];
       if (arr.length === k){ arr.push({ q: qs[k], pick, ok }); await kvSet(PLAYER_PREFIX+me.id, JSON.stringify(fresh)); }
       me = fresh; const i = players.findIndex(p=>p.id===me.id); if (i>=0) players[i]=me;
-    }catch(e){ box.querySelectorAll('.opt').forEach(x=>x.disabled=false); toast('Could not save. Check your internet.'); return; }
-    box.querySelectorAll('.opt').forEach(x=>{ const xi=+x.dataset.i; if (xi===+q.answer) x.classList.add('right'); else if (xi===pick) x.classList.add('wrong'); });
-    $('dFb').innerHTML = `<p style="font-weight:700;color:${ok?'var(--green)':'var(--red)'}">${ok?t('correct'):t('wrong')+' '+String.fromCharCode(65+ +q.answer)+'. '+esc(lq.options[+q.answer])}</p>
+    }catch(e){ answered = false; box.querySelectorAll('.opt').forEach(x=>x.disabled=false); toast('Could not save. Check your internet.'); return; }
+    box.querySelectorAll('.opt').forEach(x=>{ const xi=+x.dataset.i; if (xi===+q.answer) x.classList.add('right'); else if (pick!==null && xi===pick) x.classList.add('wrong'); });
+    const msg = pick===null ? t('timeup')+' '+String.fromCharCode(65+ +q.answer)+'. '+esc(lq.options[+q.answer])
+      : (ok?t('correct'):t('wrong')+' '+String.fromCharCode(65+ +q.answer)+'. '+esc(lq.options[+q.answer]));
+    $('dFb').innerHTML = `<p style="font-weight:700;color:${pick===null?'var(--amber)':ok?'var(--green)':'var(--red)'}">${msg}</p>
       ${q.explain?`<p class="note">${esc(q.explain)}</p>`:''}
       <p class="note">${k+1<qs.length?t('next'):t('score')}</p>`;
     setTimeout(()=>{ if (!$('dailyView').classList.contains('hidden')) dailyPlay(); }, 4000);
-  });
+  }
+  box.querySelectorAll('.opt').forEach(b=>b.onclick = ()=>finish(+b.dataset.i));
 }
 function dailyDone(){
   const mine = me.days[todayStr()] || [], right = mine.filter(a=>a.ok).length;
@@ -2258,8 +2281,11 @@ function dailyDone(){
       <div class="big">${right}/${mine.length}</div>
       <div class="word">${right===mine.length?t('perfect'):right?t('good'):t('luck')}</div>
       <p>${myRow?`${t('youAre')} #${myRow.rank} · ${myRow.score} pts`:''}</p></div>
-    <p class="note" style="text-align:center">${t('tomorrow')}</p>`;
+    <p class="note" style="text-align:center">${t('tomorrow')}</p>
+    <div class="row" style="justify-content:center;margin-top:10px"><button class="btn" id="viewMyAnswers">View my answers</button></div>
+    <div id="myAnswersBox"></div>`;
   bindLangSwitcher(dailyDone);
+  $('viewMyAnswers').onclick = ()=>{ $('viewMyAnswers').remove(); $('myAnswersBox').innerHTML = renderPlayerAnswers(me, todayStr()); };
   $('dailyBoard').classList.remove('hidden');
   $('dailyBoard').innerHTML = '<h2>Top 10</h2>' + lbTable(rows, me.id);
 }
@@ -2275,18 +2301,8 @@ async function openQuizAdmin(){
   const rows = leaderboard(), today = todayStr();
   const played = players.filter(p=>(p.days||{})[today] && p.days[today].length).length;
   $('quizStats').textContent = `${players.length} staff joined · ${played} played today`;
-  $('quizLb').innerHTML = lbTable(rows, null);
-  // Staff each get a different set of questions today, so tally by the actual question asked, not by position.
-  const todayTally = {};
-  players.forEach(p=>{ ((p.days||{})[today]||[]).forEach(a=>{
-    const s = todayTally[a.q] = todayTally[a.q] || {right:0, total:0};
-    s.total++; if (a.ok) s.right++;
-  }); });
-  const askedToday = Object.keys(todayTally).map(Number);
-  $('quizToday').innerHTML = askedToday.length ? askedToday.map(qi=>{ const q = allQuestions()[qi], s = todayTally[qi];
-    return `<div class="rev"><b>${esc(q.q)}</b><div class="note" style="color:var(--green)">Answer: ${esc(q.options[q.answer])}</div>
-      <div class="note">${s.right} of ${s.total} answered correctly (${Math.round(s.right/s.total*100)}%)</div></div>`; }).join('')
-    : '<p class="note">No one has played today yet.</p>';
+  $('quizLb').innerHTML = lbTable(rows, null, true);
+  bindLbClicks();
   const isMaster = level==='master';
   $('quizPoolInfo').textContent = (dishQuestions().length?`${dishQuestions().length} dish questions are created automatically from the Dish bank. `:'') +
     (examQuestions().length?`${examQuestions().length} questions are pulled automatically from uploaded exams (mcq, true/false and short-answer text questions — list and manual questions aren't used for the quiz). `:'') +
@@ -2294,63 +2310,121 @@ async function openQuizAdmin(){
     `${allQuestions().length} questions in total (${Math.floor(allQuestions().length/PER_DAY)} days before any repeat).`;
   $('quizFile').disabled = !isMaster; $('quizSeason').classList.toggle('hidden', !isMaster); $('quizDelPool').classList.toggle('hidden', !isMaster || !qPool || !qPool.questions.length);
   renderParticipation();
-  startLive(refreshQuizLive, 20000); // leaderboard and today's stats keep updating without a manual reload
+  startLive(refreshQuizLive, 20000); // leaderboard and participation keep updating without a manual reload
 }
-// Lighter refresh for the quiz panel — updates the leaderboard and today's stats only, so it doesn't
+function bindLbClicks(){
+  document.querySelectorAll('#quizLb tr[data-pid]').forEach(tr=>tr.onclick=()=>openPlayerDetail(tr.dataset.pid));
+}
+// Lighter refresh for the quiz panel — updates the leaderboard and participation only, so it doesn't
 // disturb a pass-mark field or a file upload someone might be mid-way through on the rest of the screen.
-// Participation is measured against the full staff roster, not just against people who have ever played —
-// someone who has NEVER opened the quiz has no "players" record at all, so without cross-referencing the
-// roster they'd be invisible instead of showing up as a non-participant.
-function participationReport(){
-  const today = todayStr();
-  const weekStart = new Date(); weekStart.setDate(weekStart.getDate()-6); weekStart.setHours(0,0,0,0);
-  const byOutlet = {}; const nonToday = [];
-  employees.forEach(e=>{
-    const p = players.find(x=>x.id===e.id);
-    const playedToday = !!(p && p.days && p.days[today] && p.days[today].length);
-    const daysThisWeek = p && p.days ? Object.keys(p.days).filter(d=>{
-      const dt = new Date(d+'T00:00:00'); return !isNaN(dt) && dt >= weekStart;
-    }).length : 0;
-    const key = e.outlet || '';
-    const ob = byOutlet[key] = byOutlet[key] || { name: outletName(e.outlet) || 'No outlet', total:0, playedToday:0, zeroWeek:0 };
-    ob.total++; if (playedToday) ob.playedToday++; if (daysThisWeek===0) ob.zeroWeek++;
-    if (!playedToday) nonToday.push({ id:e.id, name:e.name, outlet:e.outlet, daysThisWeek });
-  });
-  nonToday.sort((a,b)=> a.daysThisWeek - b.daysThisWeek || a.name.localeCompare(b.name));
-  return { byOutlet, nonToday, total: employees.length, playedToday: employees.length - nonToday.length };
-}
-function renderParticipation(){
-  if (!employees.length){ $('partSummary').textContent = 'Import the staff roster (Staff roster tab) to see participation.'; $('partByOutlet').innerHTML=''; $('nonTodayTable').innerHTML=''; $('nonTodayCount').textContent='0'; return; }
-  const r = participationReport();
-  $('partSummary').textContent = `${r.playedToday} of ${r.total} staff have played today (${Math.round(r.playedToday/r.total*100)}%).`;
-  $('partByOutlet').innerHTML = Object.values(r.byOutlet).sort((a,b)=>a.name.localeCompare(b.name)).map(o=>
-    `<tr><td>${esc(o.name)}</td><td>${o.total}</td><td>${o.playedToday} (${Math.round(o.playedToday/o.total*100)}%)</td><td>${o.zeroWeek?`<span style="color:var(--red);font-weight:700">${o.zeroWeek}</span>`:'0'}</td></tr>`
-  ).join('');
-  $('nonTodayCount').textContent = r.nonToday.length;
-  const q = norm($('nonTodaySearch').value);
-  const rows = r.nonToday.filter(x=>!q || norm(x.name).includes(q) || x.id.includes(q) || norm(outletName(x.outlet)).includes(q));
-  $('nonTodayTable').innerHTML = rows.length ? rows.map(x=>
-    `<tr${x.daysThisWeek===0?' style="background:var(--red-bg)"':''}><td>${esc(x.name)}</td><td>${esc(x.id)}</td><td>${esc(outletName(x.outlet)||'No outlet')}</td><td>${x.daysThisWeek} / 7</td></tr>`
-  ).join('') : '<tr><td colspan="4" class="note">Everyone has played today.</td></tr>';
-}
 async function refreshQuizLive(){
   if ($('quizView').classList.contains('hidden')) return;
   try{ await loadQuiz(); }catch(e){ return; }
   const rows = leaderboard(), today = todayStr();
   const played = players.filter(p=>(p.days||{})[today] && p.days[today].length).length;
   $('quizStats').textContent = `${players.length} staff joined · ${played} played today`;
-  $('quizLb').innerHTML = lbTable(rows, null);
-  const todayTally = {};
-  players.forEach(p=>{ ((p.days||{})[today]||[]).forEach(a=>{
-    const s = todayTally[a.q] = todayTally[a.q] || {right:0, total:0};
-    s.total++; if (a.ok) s.right++;
-  }); });
-  const askedToday = Object.keys(todayTally).map(Number);
-  $('quizToday').innerHTML = askedToday.length ? askedToday.map(qi=>{ const q = allQuestions()[qi], s = todayTally[qi];
-    return `<div class="rev"><b>${esc(q.q)}</b><div class="note" style="color:var(--green)">Answer: ${esc(q.options[q.answer])}</div>
-      <div class="note">${s.right} of ${s.total} answered correctly (${Math.round(s.right/s.total*100)}%)</div></div>`; }).join('')
-    : '<p class="note">No one has played today yet.</p>';
+  $('quizLb').innerHTML = lbTable(rows, null, true);
+  bindLbClicks();
   renderParticipation();
+}
+
+/* ---- Participation: Day / Week / Month, with outlet -> employee drill-down ---- */
+let partPeriod = 'day', partOutlet = null; // null = no outlet picked yet
+function periodRange(period){
+  const now = new Date(); now.setHours(0,0,0,0);
+  if (period==='week'){ const dow = now.getDay(); const start = new Date(now); start.setDate(now.getDate() + (dow===0?-6:1-dow)); return { start, end: now }; }
+  if (period==='month') return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
+  return { start: now, end: now };
+}
+function daysPlayedInRange(p, start, end){
+  if (!p || !p.days) return 0;
+  return Object.keys(p.days).filter(d=>{ const dt = new Date(d+'T00:00:00'); return !isNaN(dt) && dt>=start && dt<=end && p.days[d].length; }).length;
+}
+// Measured against the full staff roster, not just against people who have ever played — someone who has
+// NEVER opened the quiz has no "players" record at all, so without cross-referencing the roster they'd be
+// invisible instead of showing up as a non-participant.
+function participationReport(period){
+  const { start, end } = periodRange(period);
+  const byOutlet = {}, perEmployee = [];
+  employees.forEach(e=>{
+    const p = players.find(x=>x.id===e.id);
+    const daysPlayed = daysPlayedInRange(p, start, end), participated = daysPlayed>0;
+    const key = e.outlet || '';
+    const ob = byOutlet[key] = byOutlet[key] || { name: outletName(e.outlet) || 'No outlet', outlet: e.outlet||'', total:0, participated:0 };
+    ob.total++; if (participated) ob.participated++;
+    perEmployee.push({ id:e.id, name:e.name, outlet:e.outlet||'', daysPlayed, participated });
+  });
+  return { byOutlet, perEmployee };
+}
+function renderParticipation(){
+  if (!employees.length){ $('partSummary').textContent = 'Import the staff roster (Staff roster tab) to see participation.'; $('partByOutlet').innerHTML=''; $('nonTodayTable').innerHTML=''; return; }
+  document.querySelectorAll('[data-period]').forEach(b=>b.classList.toggle('primary', b.dataset.period===partPeriod));
+  const r = participationReport(partPeriod);
+  const periodLabel = partPeriod==='day'?'today':partPeriod==='week'?'this week (Mon-today)':'this month';
+  $('partSummary').textContent = `Showing participation ${periodLabel}. Tap an outlet to see its staff.`;
+  $('partByOutlet').innerHTML = Object.values(r.byOutlet).sort((a,b)=>a.name.localeCompare(b.name)).map(o=>
+    `<tr data-outlet="${esc(o.outlet)}" style="cursor:pointer;${partOutlet===o.outlet?'background:var(--blue-bg)':''}"><td>${partOutlet===o.outlet?'▾ ':'▸ '}${esc(o.name)}</td><td>${o.total}</td><td>${o.participated} / ${o.total} (${Math.round(o.participated/o.total*100)}%)</td></tr>`
+  ).join('');
+  $('partByOutlet').querySelectorAll('[data-outlet]').forEach(tr=>tr.onclick=()=>{ const k=tr.dataset.outlet; partOutlet = partOutlet===k?null:k; renderParticipation(); });
+  $('partDaysHeader').textContent = partPeriod==='day' ? 'Played today' : 'Days participated';
+  if (partOutlet===null){
+    $('partEmpTitle').textContent = 'Tap an outlet above to see its staff';
+    $('nonTodayTable').innerHTML = '';
+    return;
+  }
+  $('partEmpTitle').textContent = outletName(partOutlet) || 'No outlet';
+  const q = norm($('nonTodaySearch').value);
+  const list = r.perEmployee.filter(e=>e.outlet===partOutlet && (!q || norm(e.name).includes(q) || e.id.includes(q)))
+    .sort((a,b)=> b.daysPlayed-a.daysPlayed || a.name.localeCompare(b.name));
+  $('nonTodayTable').innerHTML = list.length ? list.map(x=>
+    `<tr${!x.participated?' style="background:var(--red-bg)"':''} data-pid="${esc(x.id)}" style="cursor:pointer"><td>${esc(x.name)}</td><td>${esc(x.id)}</td><td>${partPeriod==='day' ? (x.participated?'Yes':'No') : x.daysPlayed+' day'+(x.daysPlayed===1?'':'s')}</td></tr>`
+  ).join('') : '<tr><td colspan="3" class="note">No staff match.</td></tr>';
+  $('nonTodayTable').querySelectorAll('[data-pid]').forEach(tr=>tr.onclick=()=>openPlayerDetail(tr.dataset.pid));
+}
+document.querySelectorAll('[data-period]').forEach(b=>b.onclick=()=>{ partPeriod=b.dataset.period; partOutlet=null; renderParticipation(); });
+
+/* ---- Per-player result detail: answers + strength/weakness by topic (point 3 & 4) ---- */
+function categoryProfile(player){
+  const tally = {};
+  Object.values(player.days||{}).forEach(dayArr=>dayArr.forEach(a=>{
+    const q = allQuestions()[a.q]; if (!q) return;
+    const cat = q.category || 'General Knowledge';
+    const s = tally[cat] = tally[cat] || {right:0,total:0};
+    s.total++; if (a.ok) s.right++;
+  }));
+  return Object.entries(tally).map(([cat,s])=>({cat, right:s.right, total:s.total, pct:Math.round(s.right/s.total*100)})).sort((a,b)=>a.pct-b.pct);
+}
+function renderPlayerAnswers(player, dateStr){
+  const dayArr = (player.days||{})[dateStr] || [], qs = allQuestions();
+  if (!dayArr.length) return '<p class="note">No answers recorded for this day.</p>';
+  return dayArr.map((a,i)=>{
+    const q = qs[a.q]; if (!q) return '';
+    const picked = (a.pick!==null && a.pick!==undefined) ? q.options[a.pick] : '(no answer — time ran out)';
+    return `<div class="rev"><b>Q${i+1}. ${esc(q.q)}</b> <span class="note">(${esc(q.category||'General Knowledge')})</span>
+      <div class="ta ${a.ok?'ok':'no'}">${esc(picked)}</div>
+      ${!a.ok?`<div class="note">Correct answer: ${esc(q.options[q.answer])}</div>`:''}</div>`;
+  }).join('');
+}
+function openPlayerDetail(playerId){
+  const p = players.find(x=>x.id===playerId); if (!p) return;
+  const box = $('playerDetailBox'); box.classList.remove('hidden');
+  const profile = categoryProfile(p);
+  const days = Object.keys(p.days||{}).sort().reverse().slice(0,14);
+  box.innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(p.name)}</h2><button class="btn small" id="pdClose">Close</button></div>
+    <p class="note" style="margin-top:0">${esc(outletName(p.outlet)||'No outlet')}</p>
+    ${profile.length ? `<h3>Strengths & weaknesses</h3>` + profile.map(c=>
+      `<div class="row" style="justify-content:space-between;padding:4px 0;border-top:1px solid var(--line)"><span>${esc(c.cat)}</span><b style="color:${c.pct<60?'var(--red)':c.pct>=85?'var(--green)':'var(--amber)'}">${c.pct}% (${c.right}/${c.total})</b></div>`
+    ).join('') : '<p class="note">No answers yet.</p>'}
+    <h3 style="margin-top:14px">Recent days</h3>
+    ${days.length ? days.map(d=>{ const arr = p.days[d]; const right = arr.filter(a=>a.ok).length;
+      return `<div class="row" style="justify-content:space-between;padding:4px 0;border-top:1px solid var(--line);cursor:pointer" data-day="${esc(d)}"><span>${fmtDate(d)}</span><b>${right} / ${arr.length}</b></div>`;
+    }).join('') : '<p class="note">No days played yet.</p>'}
+    <div id="pdDayDetail"></div>`;
+  box.querySelector('#pdClose').onclick = ()=>box.classList.add('hidden');
+  box.querySelectorAll('[data-day]').forEach(row=>row.onclick=()=>{
+    $('pdDayDetail').innerHTML = `<h3 style="margin-top:14px">${fmtDate(row.dataset.day)}</h3>` + renderPlayerAnswers(p, row.dataset.day);
+  });
+  box.scrollIntoView({ behavior:'smooth', block:'start' });
 }
 // Shows once per login, not on every live-refresh re-render. Covers both birthdays and work
 // anniversaries in one popup rather than stacking two separate modals on top of each other.
@@ -2362,21 +2436,40 @@ function todayMatches(dateStr){
   const [y,m,d] = parts;
   return (m===mm && d===dd) ? today.getFullYear()-(+y) : null;
 }
-function renderAnniversaryPopup(){
-  if (level!=='master' || anniversaryShown || !employees.length) return;
+function todayEvents(){
   const birthdays = employees.filter(e=>e.dob && todayMatches(e.dob)!==null);
   const anniversaries = employees.filter(e=>{ const y = todayMatches(e.joined); return y!==null && y>=1; })
     .map(e=>({ ...e, years: todayMatches(e.joined) })).sort((a,b)=>b.years-a.years);
+  return { birthdays, anniversaries };
+}
+function eventsSectionHtml(title, rows){
+  if (!rows.length) return '';
+  return `<h3 style="margin:14px 0 4px">${title}</h3>` +
+    rows.map(h=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)"><b>${esc(h.name)}</b><span class="note">${h.years?h.years+' year'+(h.years>1?'s':''):''} · ${esc(outletName(h.outlet)||h.dept||'-')}</span></div>`).join('');
+}
+function renderAnniversaryPopup(){
+  if (level!=='master' || anniversaryShown || !employees.length) return;
+  const { birthdays, anniversaries } = todayEvents();
   if (!birthdays.length && !anniversaries.length) return;
   anniversaryShown = true;
-  const section = (title, rows) => !rows.length ? '' : `<h3 style="margin:14px 0 4px">${title}</h3>` +
-    rows.map(h=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)"><b>${esc(h.name)}</b><span class="note">${h.years?h.years+' year'+(h.years>1?'s':''):''} · ${esc(outletName(h.outlet)||h.dept||'-')}</span></div>`).join('');
   const m = modal(`<h2>Today's recognition</h2>
     <p class="note">A good moment to wish or thank these staff in person.</p>
-    ${section('🎂 Birthdays today', birthdays)}
-    ${section('🎉 Work anniversaries today', anniversaries)}
+    ${eventsSectionHtml('🎂 Birthdays today', birthdays)}
+    ${eventsSectionHtml('🎉 Work anniversaries today', anniversaries)}
     <div class="row" style="margin-top:12px"><button class="btn primary" id="annClose">Close</button></div>`);
   m.querySelector('#annClose').onclick = ()=>m.remove();
+}
+// Persistent card (not just the one-time popup above) so today's birthdays/anniversaries stay visible
+// on the overview all day, even after the popup's been closed and forgotten.
+function renderTodayEventsCard(){
+  const box = $('todayEventsBox');
+  if (level!=='master' || !employees.length){ box.classList.add('hidden'); return; }
+  const { birthdays, anniversaries } = todayEvents();
+  box.classList.toggle('hidden', !birthdays.length && !anniversaries.length);
+  if (!birthdays.length && !anniversaries.length) return;
+  box.innerHTML = `<h2 style="margin:0 0 6px">🎉 Today's Events</h2>` +
+    eventsSectionHtml('🎂 Birthdays today', birthdays) +
+    eventsSectionHtml('Work anniversaries today', anniversaries);
 }
 /* ============ STAFF ROSTER ============ */
 let rosterParsed = null; // rows awaiting review before import
