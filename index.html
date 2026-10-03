@@ -266,6 +266,7 @@
             <button class="btn" id="bankBtn">Exam bank</button>
             <button class="btn" id="rosterBtn">Staff roster</button>
             <button class="btn hidden" id="backupBtn">Backup</button>
+            <button class="btn hidden" id="viewLinkBtn">View-only link for approval</button>
             <button class="btn primary" id="addBtn">Add trainee</button>
           </div>
         </div>
@@ -460,6 +461,7 @@ const KV = 'kv';                      // same collection the sales tracker uses
 const PREFIX = 'training_t_';         // trainee records
 const EXAM_PREFIX = 'training_exam_'; // uploaded exam papers
 const LINK_PREFIX = 'training_x_';    // one-time exam links
+const VIEW_PREFIX = 'training_view_'; // read-only dashboard links — no password, revocable, zero edit rights
 const PENDING_PREFIX = 'training_pend_'; // outlet-submitted trainees awaiting master approval
 const EMP_PREFIX = 'training_emp_'; // imported staff roster — Employee ID login for the daily quiz
 const PASS = 0.85;
@@ -938,7 +940,8 @@ function renderExamReview(){
 function renderOverview(){
   $('whoAmI').textContent = level==='master'?'Master access':level==='management'?'Management access':outletName(myOutlet);
   $('backupBtn').classList.toggle('hidden', level!=='master');
-  $('rosterBtn').classList.toggle('hidden', level!=='master');
+  $('viewLinkBtn').classList.toggle('hidden', level!=='master');
+  $('rosterBtn').classList.toggle('hidden', level!=='master' && level!=='viewer');
   renderPending();
   renderAnniversaryPopup();
   renderExamReview();
@@ -1355,6 +1358,29 @@ $('backupBtn').onclick = async ()=>{
     toast('Backup downloaded');
   }catch(e){ toast('Could not create backup. Check your internet.'); }
   $('backupBtn').disabled = false;
+};
+$('viewLinkBtn').onclick = async ()=>{
+  $('viewLinkBtn').disabled = true;
+  try{
+    const existing = await kvPrefix(VIEW_PREFIX);
+    let token;
+    if (existing.length){ token = JSON.parse(existing[0]).token; }
+    else{
+      token = Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+      await kvSet(VIEW_PREFIX+token, JSON.stringify({ token, created:new Date().toISOString() }));
+    }
+    const url = `${location.origin}${location.pathname}?view=${token}`;
+    const m = modal(`<h2>View-only link</h2>
+      <p class="note">Anyone with this link sees the whole dashboard exactly as you do — every trainee, dish, exam and the quiz leaderboard — but every Add, Edit, Upload, Delete and Save control is disabled. Nothing they do can change or break anything.</p>
+      <div class="linkbox">${esc(url)}</div>
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="vlCopy">Copy link</button><button class="btn danger" id="vlRevoke">Turn off this link</button></div>`, true);
+    m.querySelector('#vlCopy').onclick = async ()=>{ try{ await navigator.clipboard.writeText(url); toast('Link copied'); }catch(e){ prompt('Copy this link:', url); } };
+    m.querySelector('#vlRevoke').onclick = async ()=>{
+      if (!confirm('Turn off the view-only link? Anyone using it will be logged out immediately.')) return;
+      try{ await kvSet(VIEW_PREFIX+token, ''); toast('Link turned off'); m.remove(); }catch(e){ toast('Could not save. Check your internet.'); }
+    };
+  }catch(e){ toast('Could not create the link. Check your internet.'); }
+  $('viewLinkBtn').disabled = false;
 };
 
 function printRecord(t){
@@ -2446,6 +2472,23 @@ $('quizBtn').onclick = ()=>openQuizAdmin();
 $('nonTodaySearch').oninput = ()=>renderParticipation();
 $('quizBack').onclick = ()=>{ show('listView'); renderOverview(); };
 
+/* ============ READ-ONLY (VIEWER) LOCKDOWN ============ */
+// A small, explicit allowlist of pure-navigation/pure-view controls — everything else with the app's
+// standard ".btn" action-button class gets disabled, plus every file/number input and every <select>.
+// This runs on every DOM change (MutationObserver), so it covers every screen automatically rather than
+// needing every render function in the app to remember to call it.
+const VIEWER_SAFE_IDS = new Set(['backBtn','bankBack','quizBack','rosterBack','dishBtn','quizBtn','bankBtn','rosterBtn','jGo','pwGo']);
+function lockdownForViewer(){
+  if (level!=='viewer') return;
+  document.querySelectorAll('#app button.btn').forEach(el=>{
+    const safe = VIEWER_SAFE_IDS.has(el.id) || el.hasAttribute('data-dview') || el.hasAttribute('data-prev');
+    el.disabled = !safe;
+  });
+  document.querySelectorAll('#app button.chk').forEach(el=>{ el.disabled = true; }); // per-topic training checklist ticks
+  document.querySelectorAll('#app input[type=file], #app input[type=number], #app select').forEach(el=>{ el.disabled = true; });
+}
+new MutationObserver(()=>lockdownForViewer()).observe(document.body, { childList:true, subtree:true });
+
 /* ============ LOGIN ============ */
 function enter(lv, outletId){
   level=lv; myOutlet=outletId||null;
@@ -2455,6 +2498,7 @@ function enter(lv, outletId){
   $('bankBtn').classList.toggle('hidden', lv==='outlet');
   $('quizBtn').classList.toggle('hidden', lv==='outlet');
   show('listView'); renderOverview();
+  if (lv==='viewer') toast('View-only — nothing can be changed, added or deleted from this link.');
 }
 function tryLogin(){
   const pw=$('pw').value; $('pwErr').classList.add('hidden');
@@ -2480,10 +2524,17 @@ $('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
     return;
   }
   if (new URLSearchParams(location.search).has('daily')){ $('banner').classList.add('hidden'); return runDaily(); }
+  const viewToken = qp.get('view');
   try{
     const a = await kvGet('access_passwords'); if (a) access = JSON.parse(a);
     if (access.whatsapp) $('banner').href = 'https://wa.me/'+access.whatsapp;
     await Promise.all([loadOutlets(), loadAll(), loadExams(), loadDishes(), loadEmployees()]);
+    if (viewToken){
+      const raw = await kvGet(VIEW_PREFIX+viewToken);
+      if (!raw){ $('loading').textContent = 'This view-only link has been turned off or never existed. Ask for a new one.'; $('loading').style.color = 'var(--red)'; return; }
+      $('loading').classList.add('hidden'); $('banner').classList.add('hidden');
+      return enter('viewer');
+    }
     $('loading').classList.add('hidden'); $('pw').disabled=false; $('pwGo').disabled=false; $('pw').focus();
   }catch(e){
     $('loading').textContent = 'Could not connect. Check your internet and refresh the page.';
