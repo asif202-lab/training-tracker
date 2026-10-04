@@ -136,6 +136,12 @@
   .lb .rk{width:36px;font-weight:800;color:var(--navy);text-align:center}
   .lb tr.me td{background:var(--blue-bg);font-weight:700}
   .lb tr.top1 .rk{color:#b8860b} .lb tr.top2 .rk{color:#7d8791} .lb tr.top3 .rk{color:#a0522d}
+  .tier{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;white-space:nowrap}
+  .tier.diamond{background:#dff3ff;color:#0a6e9e}
+  .tier.gold{background:#fff1c2;color:#8a6200}
+  .tier.silver{background:#eceff3;color:#59636e}
+  .lbctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}
+  .lbctl input[type=date]{padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:var(--ink)}
   .opt.right{border-color:var(--green);background:var(--green-bg);color:var(--green);font-weight:700}
   .opt.wrong{border-color:var(--red);background:var(--red-bg);color:var(--red);font-weight:700}
   .qimg{max-width:100%;max-height:260px;border-radius:10px;display:block;margin:0 auto 10px}
@@ -317,7 +323,7 @@
         <div class="row"><a class="btn primary" id="quizShare" target="_blank" style="text-decoration:none">Share on WhatsApp</a><button class="btn" id="quizCopy">Copy link</button></div>
         <p class="note" id="quizStats" style="margin-top:10px"></p>
       </div>
-      <div class="card"><h2>Leaderboard</h2><div id="quizLb"></div><p class="note">Tap a name to see their answers and strong/weak topics.</p></div>
+      <div class="card"><h2>Leaderboard</h2><div id="quizLb"></div><p class="note">Tap a name to see that day's questions and answers, plus their strong and weak topics.</p></div>
       <div class="card">
         <h2>Participation by outlet</h2>
         <div class="row" style="margin-bottom:8px"><button class="btn small" data-period="day">Day</button><button class="btn small" data-period="week">Week</button><button class="btn small" data-period="month">Month</button></div>
@@ -897,7 +903,7 @@ function traineeCard({t,c}){
   const est = estimate(t,c), notStarted = c.day < 1;
   const behind = !notStarted && (est > c.targetDate || c.pct + 1e-9 < c.expected);
   return `<button class="tcard ${behind?'behind':''}" data-id="${esc(t.id)}">
-    <div class="nm">${esc(t.name)}</div>
+    <div class="nm">${esc(shownName(t.name, t.empId))}</div>
     <div class="ln"><span>Buddy</span><b>${esc(t.coverBuddy ? t.coverBuddy+' (cover)' : (t.buddy||'-'))}</b></div>
     <div class="ln"><span>${notStarted?'Starts':'Expected completion'}</span><b class="${behind && est > c.targetDate?'no':''}">${fmtDate(notStarted?t.start:est)}</b></div>
     <div class="ln"><span>Completed as of today</span><b class="${behind?'no':'ok'}">${Math.round(c.pct*100)}%</b></div>
@@ -911,7 +917,7 @@ function renderPending(){
     box.classList.toggle('hidden', !pending.length);
     if (pending.length) box.innerHTML = `<h2 style="margin:0 0 8px">Waiting for approval (${pending.length})</h2>` +
       pending.map(p=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)">
-        <div><b>${esc(p.name)}</b><div class="note" style="margin:0">${esc(p.requestedBy)} · ${esc((programById(p.program)||{}).name || p.program)} · from ${fmtDate(p.start)}</div></div>
+        <div><b>${esc(shownName(p.name, p.empId))}</b><div class="note" style="margin:0">${esc(p.requestedBy)} · ${esc((programById(p.program)||{}).name || p.program)} · from ${fmtDate(p.start)}</div></div>
         <div class="row"><button class="btn small primary" data-approve="${esc(p.id)}">Approve</button><button class="btn small danger" data-reject="${esc(p.id)}">Reject</button></div>
       </div>`).join('');
     box.querySelectorAll('[data-approve]').forEach(b=>b.onclick=async ()=>{
@@ -936,7 +942,7 @@ function renderPending(){
     const mine = pending.filter(p=>p.outlet===myOutlet);
     box.classList.toggle('hidden', !mine.length);
     if (mine.length) box.innerHTML = `<h2 style="margin:0 0 8px">Waiting for master approval (${mine.length})</h2>` +
-      mine.map(p=>`<div class="note" style="padding:4px 0"><b>${esc(p.name)}</b> · sent ${fmtDate(p.requestedAt.slice(0,10))}</div>`).join('');
+      mine.map(p=>`<div class="note" style="padding:4px 0"><b>${esc(shownName(p.name, p.empId))}</b> · sent ${fmtDate(p.requestedAt.slice(0,10))}</div>`).join('');
   } else box.classList.add('hidden');
 }
 async function refreshOverviewLive(){
@@ -960,7 +966,7 @@ function renderExamReview(){
       const ex = examById(e.examId);
       const manualQs = ex ? ex.questions.map((q,i)=>({q,i})).filter(x=>x.q.type==='manual') : [];
       return `<div class="rev" data-review="${esc(t.id)}:${idx}" style="border-top:1px solid var(--line);padding:10px 0">
-        <b>${esc(t.name)}</b> · ${esc(e.name)} <span class="note">(${fmtDate(e.date)})</span>
+        <b>${esc(shownName(t.name, t.empId))}</b> · ${esc(e.name)} <span class="note">(${fmtDate(e.date)})</span>
         ${manualQs.length ? manualQs.map(({q,i})=>`<div style="margin-top:8px">
           <p class="note" style="margin:0 0 2px"><b>${esc(q.q)}</b> (${q.points||1} mark${(q.points||1)>1?'s':''})</p>
           <p class="note" style="margin:0 0 4px;white-space:pre-wrap;background:#f7f9fb;border:1px solid var(--line);border-radius:8px;padding:6px 8px"><b>Trainee wrote:</b> ${esc((e.detail && e.detail[i] && e.detail[i].a) || '(no answer given)')}</p>
@@ -1089,7 +1095,7 @@ function renderOverview(){
   $('doneToggle').textContent = done.length ? (showDone?'Hide completed trainees':'Show completed trainees ('+done.length+')') : '';
   $('doneCards').classList.toggle('hidden', !showDone || !done.length);
   $('doneCards').innerHTML = done.map(t=>`<button class="tcard" style="border-left-color:#9aa4af" data-id="${esc(t.id)}">
-      <div class="nm">${esc(t.name)}</div>
+      <div class="nm">${esc(shownName(t.name, t.empId))}</div>
       <div class="ln"><span>Buddy</span><b>${esc(t.buddy||'-')}</b></div>
       <div class="ln"><span>Completed on</span><b>${fmtDate(t.completed.d)}</b></div>
       <div class="ln"><span>Completed</span><b>100%</b></div></button>`).join('');
@@ -1235,7 +1241,7 @@ function renderDetail(){
   const t=current, c=calc(t), locked = t.completed || t.archived;
   $('dHead').innerHTML = `
     <div class="row" style="justify-content:space-between">
-      <div><h2 style="margin:0">${esc(t.name)}</h2>
+      <div><h2 style="margin:0">${esc(shownName(t.name, t.empId))}</h2>
       <div class="note">${esc(outletName(t.outlet))} · ${esc(c.prog ? c.prog.name+' ('+c.prog.days+' days)' : 'Program not found: '+t.program)}${t.empId?' · ID '+esc(t.empId):''}</div>
       <div class="note">Started ${fmtDate(t.start)} · Buddy: ${esc(t.buddy||'-')}</div></div>
       <span class="pill ${c.cls}">${esc(c.status)}</span>
@@ -1395,7 +1401,7 @@ function showAttempt(t, idx){
   const a = (t.exams||[])[idx]; if (!a) return;
   const ex = examById(a.examId);
   const p = pctOf(a);
-  let body = `<h2>${esc(a.name)}</h2><p class="note">${esc(t.name)} · ${fmtDate(a.date)} · ${a.auto?'Online exam':'Paper exam, recorded by '+esc(a.by||'-')}</p>
+  let body = `<h2>${esc(a.name)}</h2><p class="note">${esc(shownName(t.name, t.empId))} · ${fmtDate(a.date)} · ${a.auto?'Online exam':'Paper exam, recorded by '+esc(a.by||'-')}</p>
     <div class="result ${isPass(a)?'pass':'fail'}" style="padding:14px"><div class="big" style="font-size:40px">${fmtPct(p)}</div><div>${a.score} / ${a.total} marks · pass mark ${Math.round(passMarkFor(a.name,a.examId)*100)}% · ${isPass(a)?'Pass':'Fail'}</div></div>`;
   const editable = canManage() && a.auto && ex && a.detail;
   if (a.auto && ex && a.detail){
@@ -1407,10 +1413,26 @@ function showAttempt(t, idx){
         <div class="row"><span class="note">Marks:</span>${editable?`<input type="number" class="mk" data-i="${i}" value="${d.pts??0}" min="0" max="${max}" step="0.5" style="width:80px">`:`<b>${d.pts??0}</b>`}<span class="note">/ ${max}</span></div></div>`;
     }).join('');
   } else if (a.auto) body += '<p class="note">The exam paper for this attempt is no longer in the exam bank, so answers cannot be shown.</p>';
-  body += `<div class="row" style="margin-top:12px">${editable?'<button class="btn primary" id="mSave">Save corrected marks</button><button class="btn" id="mRemark">Re-mark automatically</button>':''}<button class="btn" id="mClose">Close</button></div>`;
+  body += `<div class="row" style="margin-top:12px">${editable?'<button class="btn primary" id="mSave">Save corrected marks</button><button class="btn" id="mRemark">Re-mark automatically</button>':''}<button class="btn" id="mClose">Close</button>${level==='master'?'<button class="btn danger" id="mDelete">Delete this result</button>':''}</div>`;
   if (editable) body += '<p class="note">Auto-marking allows small spelling mistakes. If a correct answer was marked wrong, change its marks here.</p>';
   const m = modal(body);
   m.querySelector('#mClose').onclick = ()=>m.remove();
+  const dl = m.querySelector('#mDelete');
+  if (dl) dl.onclick = async ()=>{
+    if (!confirm(`Delete this result for ${shownName(t.name, t.empId)} — ${a.name}, ${fmtDate(a.date)}?\n\nIt is removed from their record and can't be brought back.`)) return;
+    dl.disabled = true;
+    try{
+      const upd = await saveTrainee(t.id, x=>{
+        const i = (x.exams||[]).findIndex(e=> a.token ? e.token===a.token
+          : (e.name===a.name && e.date===a.date && e.score===a.score && e.total===a.total));
+        if (i>=0) x.exams.splice(i,1);
+      });
+      if (a.token){ try{ await kvSet(LINK_PREFIX+a.token, ''); }catch(e){} } // the old exam link stops working too
+      if (current && current.id===t.id) current = upd;
+      m.remove(); toast('Result deleted');
+      if (!$('detailView').classList.contains('hidden')) renderDetail(); else renderList();
+    }catch(e){ toast('Could not delete. Check your internet.'); dl.disabled = false; }
+  };
   const rm = m.querySelector('#mRemark');
   if (rm) rm.onclick = ()=>{ m.querySelectorAll('.mk').forEach(inp=>{ const i=+inp.dataset.i; inp.value = scoreQuestion(ex.questions[i], a.detail[i].a); }); toast('Marks recalculated. Press Save to keep them.'); };
   const s = m.querySelector('#mSave');
@@ -2099,9 +2121,11 @@ function detectBrand(text){
 // A player's brand comes from their roster department text first (it has the clearest signal, e.g.
 // "LBJLT Production"), falling back to their resolved outlet's name if department text didn't resolve.
 function playerBrand(playerId){
-  const emp = employees.find(e=>e.id===playerId);
-  if (!emp) return null;
-  return detectBrand(emp.dept) || detectBrand(outletName(emp.outlet));
+  const emp = rosterEntry(playerId);
+  if (emp) return detectBrand(emp.dept) || detectBrand(outletName(emp.outlet));
+  // Not in the roster: use the outlet they picked themselves the first time they played.
+  const p = players.find(x=>x.id===playerId);
+  return p && p.outlet ? detectBrand(outletName(p.outlet)) : null;
 }
 function examQuestions(){
   const out = [];
@@ -2179,25 +2203,103 @@ function todaysQuestions(playerId){
   const d = Math.max(0, Math.floor((parseDate(todayStr()) - parseDate(qCfg.start)) / 86400000));
   return Array.from({length:PER_DAY}, (_,k)=> pool[order[(d*PER_DAY + k) % n]].i);
 }
-function playerScore(p){
-  let score=0, days=0;
-  Object.entries(p.days||{}).forEach(([date,arr])=>{ if (date >= qCfg.start){ days++; arr.forEach(a=>{ if (a.ok) score++; }); } });
-  return { score, days };
+/* ---- LEADERBOARD ENGINE START ---- */
+// Tiers reward steady play AND good scores across the whole season — never a single good day. A player
+// needs BOTH enough participation (share of the days since they started) and enough accuracy, plus a
+// minimum number of days played, so one perfect day can't earn a badge. Change the numbers here to tune.
+// Order matters: best tier first.
+const LB_MIN_DAYS = 5;
+const LB_TIERS = [
+  { key:'diamond', label:'Diamond', icon:'💎', minParticipation:0.80, minAccuracy:0.85 },
+  { key:'gold',    label:'Gold',    icon:'🥇', minParticipation:0.60, minAccuracy:0.70 },
+  { key:'silver',  label:'Silver',  icon:'🥈', minParticipation:0.40, minAccuracy:0.50 }
+];
+function tierFor(daysPlayed, participation, accuracy){
+  if (daysPlayed < LB_MIN_DAYS) return null;
+  return LB_TIERS.find(t=>participation>=t.minParticipation && accuracy>=t.minAccuracy) || null;
 }
-function leaderboard(){
-  const rows = players.map(p=>({p, ...playerScore(p)})).filter(r=>r.days>0);
-  rows.sort((a,b)=> b.score-a.score || a.days-b.days || a.p.name.localeCompare(b.p.name));
-  let rank = 0, prev = null;
-  rows.forEach((r,i)=>{ if (!prev || r.score!==prev.score || r.days!==prev.days) rank = i+1; r.rank = rank; prev = r; });
-  return rows;
+const lbDays = (fromStr, toStr) => Math.floor((parseDate(toStr) - parseDate(fromStr)) / 86400000) + 1;
+function shiftDate(dateStr, delta){ const d = parseDate(dateStr); d.setDate(d.getDate()+delta); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function clampLbDate(s){ const today = todayStr(); if (!s || s > today) return today; if (qCfg && s < qCfg.start) return qCfg.start; return s; }
+
+// mode 'day'     -> only that one date, ranked by that day's score
+// mode 'overall' -> everything from the season start up to and including that date ("as of" that day)
+// Participation is measured from each player's own first day, so someone who joined last week isn't
+// penalised for the weeks before they started.
+function leaderboardFor(mode, dateStr){
+  const to = clampLbDate(dateStr), seasonFrom = qCfg.start, from = mode==='day' ? to : seasonFrom;
+  const rows = [];
+  players.forEach(p=>{
+    let correct=0, answered=0, daysPlayed=0, firstPlay=null;
+    Object.entries(p.days||{}).forEach(([date,arr])=>{
+      if (!arr || !arr.length || date < seasonFrom) return;
+      if (!firstPlay || date < firstPlay) firstPlay = date;
+      if (date>=from && date<=to){ daysPlayed++; arr.forEach(a=>{ answered++; if (a.ok) correct++; }); }
+    });
+    if (!daysPlayed) return;
+    const since = firstPlay > from ? firstPlay : from;
+    const window = Math.max(1, lbDays(since, to));
+    const participation = Math.min(1, daysPlayed / window), accuracy = answered ? correct/answered : 0;
+    rows.push({ p, correct, answered, daysPlayed, window, participation, accuracy,
+      tier: mode==='day' ? null : tierFor(daysPlayed, participation, accuracy) });
+  });
+  const tierOrder = r => r.tier ? LB_TIERS.indexOf(r.tier) : LB_TIERS.length;
+  rows.sort(mode==='day'
+    ? (a,b)=> b.correct-a.correct || a.p.name.localeCompare(b.p.name)
+    : (a,b)=> tierOrder(a)-tierOrder(b) || b.correct-a.correct || b.accuracy-a.accuracy || b.daysPlayed-a.daysPlayed || a.p.name.localeCompare(b.p.name));
+  rows.forEach((r,i)=>{ r.rank = i+1; }); // always 1,2,3,4… — no shared ranks
+  return { rows, mode, from, to };
 }
-function lbTable(rows, meId, clickable){
-  const top = rows.slice(0,10), me = rows.find(r=>r.p.id===meId);
-  const tr = r=>`<tr class="${r.p.id===meId?'me':''} ${r.rank<=3?'top'+r.rank:''}" ${clickable?`data-pid="${esc(r.p.id)}" style="cursor:pointer"`:''}><td class="rk">${r.rank}</td><td>${esc(r.p.name)}<div class="note" style="margin:0">${esc(outletName(r.p.outlet))}</div></td><td style="text-align:right"><b>${r.score}</b> pts</td></tr>`;
-  if (!rows.length) return '<p class="note">No answers yet this season. Be the first!</p>';
-  return `<table class="lb">${top.map(tr).join('')}${me && me.rank>10 ? '<tr><td colspan="3" class="note" style="text-align:center">...</td></tr>'+tr(me) : ''}</table>
-    <p class="note">1 point per correct answer. Season started ${fmtDate(qCfg.start)}.</p>`;
+function lbNoteText(data){
+  if (data.mode==='day') return `Showing ${fmtDate(data.to)} only — 1 point per correct answer. Same score is listed alphabetically. Tiers look at the whole season, so they appear on the Overall view.`;
+  const tiers = LB_TIERS.map(t=>`${t.icon} ${t.label}: played ${Math.round(t.minParticipation*100)}%+ of days with ${Math.round(t.minAccuracy*100)}%+ correct`).join(' · ');
+  return `${data.to===todayStr() ? 'Overall up to today' : 'Overall up to '+fmtDate(data.to)}. Ranked by tier, then points (1 per correct answer) — never one good day. ${tiers}. A tier needs at least ${LB_MIN_DAYS} days played. Season started ${fmtDate(qCfg.start)}.`;
 }
+const tierBadge = t => t ? `<span class="tier ${t.key}">${t.icon} ${t.label}</span>` : '';
+function lbTableHtml(data, st, opts){
+  const { rows, mode } = data, meId = opts.meId || null, caption = `<p class="note">${lbNoteText(data)}</p>`;
+  if (!rows.length) return `<p class="note">${mode==='day' ? 'Nobody played on '+fmtDate(data.to)+'.' : 'No answers yet this season. Be the first!'}</p>${caption}`;
+  const showAll = !!(opts.allowAll && st.showAll), me = rows.find(r=>r.p.id===meId);
+  const right = r => mode==='day'
+    ? `<b>${r.correct}/${r.answered}</b><div class="note" style="margin:0">that day</div>`
+    : `<b>${r.correct}</b> pts<div class="note" style="margin:0">${r.daysPlayed}/${r.window} days · ${Math.round(r.accuracy*100)}%</div>`;
+  const tr = r=>`<tr class="${r.p.id===meId?'me':''} ${r.rank<=3?'top'+r.rank:''}" ${opts.clickable?`data-pid="${esc(r.p.id)}" style="cursor:pointer"`:''}><td class="rk">${r.rank}</td><td>${esc(playerName(r.p))}${tierBadge(r.tier)}<div class="note" style="margin:0">${esc(outletName(playerOutletId(r.p)))}</div></td><td style="text-align:right">${right(r)}</td></tr>`;
+  const shown = showAll ? rows : rows.slice(0,10);
+  const extra = (!showAll && me && me.rank>10) ? '<tr><td colspan="3" class="note" style="text-align:center">...</td></tr>'+tr(me) : '';
+  const toggle = (opts.allowAll && rows.length>10) ? `<div class="row" style="justify-content:center;margin-top:8px"><button class="btn small" data-lbshow>${showAll?'Show top 10':'Show all '+rows.length}</button></div>` : '';
+  return `<table class="lb">${shown.map(tr).join('')}${extra}</table>${toggle}${caption}`;
+}
+// One leaderboard component used by the admin panel, the boss's view-only link and the staff result screen.
+// Its mode/date live in lbStates (not the DOM) so the 20-second auto-refresh can redraw just the table
+// without closing a date picker someone is in the middle of using.
+const lbStates = {};
+function lbRender(key, containerId, opts={}, tableOnly=false){
+  const el = $(containerId); if (!el) return;
+  const st = lbStates[key] = lbStates[key] || { mode:'overall', date:todayStr(), showAll:false };
+  st.date = clampLbDate(st.date);
+  const data = leaderboardFor(st.mode, st.date), tblHtml = lbTableHtml(data, st, opts);
+  const redo = ()=>lbRender(key, containerId, opts);
+  const bindRows = ()=>{
+    el.querySelectorAll('tr[data-pid]').forEach(tr=>tr.onclick=()=>toggleInlineResult(tr, st.date, el));
+    const sh = el.querySelector('[data-lbshow]'); if (sh) sh.onclick = ()=>{ st.showAll = !st.showAll; redo(); };
+  };
+  const tbl = el.querySelector('.lbtbl');
+  if (tableOnly && tbl){ tbl.innerHTML = tblHtml; bindRows(); return; }
+  el.innerHTML = `<div class="lbctl">
+      <button class="btn small ${st.mode==='overall'?'primary':''}" data-lbmode="overall">Overall</button>
+      <button class="btn small ${st.mode==='day'?'primary':''}" data-lbmode="day">By day</button>
+      <button class="btn small" data-lbstep="-1" aria-label="Previous day">‹</button>
+      <input type="date" data-lbdate value="${esc(st.date)}" min="${esc(qCfg.start)}" max="${esc(todayStr())}" aria-label="Choose a date">
+      <button class="btn small" data-lbstep="1" aria-label="Next day">›</button>
+      <button class="btn small" data-lbtoday>Today</button>
+    </div><div class="lbtbl">${tblHtml}</div>`;
+  el.querySelectorAll('[data-lbmode]').forEach(b=>b.onclick=()=>{ st.mode = b.dataset.lbmode; st.showAll = false; redo(); });
+  el.querySelectorAll('[data-lbstep]').forEach(b=>b.onclick=()=>{ st.date = clampLbDate(shiftDate(st.date, +b.dataset.lbstep)); redo(); });
+  el.querySelector('[data-lbtoday]').onclick = ()=>{ st.date = todayStr(); redo(); };
+  el.querySelector('[data-lbdate]').onchange = e=>{ if (e.target.value){ st.date = clampLbDate(e.target.value); redo(); } };
+  bindRows();
+}
+/* ---- LEADERBOARD ENGINE END ---- */
 async function sha(text){ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''); }
 
 // ---- Language (daily quiz screens only, for now — these are the pages frontline staff use most).
@@ -2255,6 +2357,13 @@ function dailyJoin(){
       <p class="note" style="max-width:320px;margin:0 auto 16px">${t('sub')}</p>
       <label class="f" for="jEmpId" style="text-align:left">${t('empId')}</label>
       <input id="jEmpId" inputmode="numeric" style="width:100%;font-size:22px;text-align:center;letter-spacing:1px;padding:14px" placeholder="e.g. 245" autocomplete="off">
+      <div id="jNewBox" class="hidden" style="text-align:left;margin-top:12px">
+        <p class="note" style="margin:0 0 8px">We don't have this ID in the staff list yet. Tell us who you are — only asked this once — so your score shows with your name on the leaderboard.</p>
+        <label class="f" for="jName">Your full name</label>
+        <input id="jName" style="width:100%" autocomplete="name">
+        <label class="f" for="jOutlet">Your outlet</label>
+        <select id="jOutlet" style="width:100%"><option value="">— Select your outlet (leave if head office) —</option>${outlets.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select>
+      </div>
       <p class="note err hidden" id="jErr"></p>
       <button class="btn primary" id="jGo" style="width:100%;margin-top:14px;padding:14px;font-size:16px;border-radius:12px">${t('go')}</button>
     </div>`;
@@ -2263,6 +2372,7 @@ function dailyJoin(){
   const err = m=>{ $('jErr').textContent=m; $('jErr').classList.remove('hidden'); };
   const go = async ()=>{
     const typed = $('jEmpId').value.trim();
+    $('jErr').classList.add('hidden');
     if (!typed) return err('Enter your Employee ID.');
     $('jGo').disabled = true;
     try{
@@ -2270,14 +2380,31 @@ function dailyJoin(){
       // "45") never breaks the match against the roster — compared with leading zeros stripped, so
       // either form finds the same person and the same existing player record, never a duplicate.
       const norm = normEmpId(typed);
-      const emp = employees.find(e=>normEmpId(e.id)===norm);
+      const emp = rosterEntry(typed);
       let p = players.find(x=>x.id===typed) || players.find(x=>normEmpId(x.id)===norm);
+      // Someone the staff list doesn't know (a new hire, or missing from the HR export): ask for their name
+      // once so the leaderboard shows a person, never "Staff 123". Older records still saved under that
+      // placeholder get asked the next time they play.
+      const needsName = !emp && (!p || isPlaceholderName(p.name));
+      let typedName = '', pickedOutlet = '';
+      if (needsName){
+        typedName = ($('jName').value||'').trim().replace(/\s+/g,' ');
+        pickedOutlet = $('jOutlet').value;
+        if (typedName.length < 3){
+          $('jNewBox').classList.remove('hidden'); $('jName').focus();
+          err('Please type your full name — it is only asked once.');
+          $('jGo').disabled = false; return;
+        }
+      } else $('jNewBox').classList.add('hidden');
       if (!p){
         const id = emp ? emp.id : norm;
-        p = { id, name: emp ? emp.name : ('Staff '+id), outlet: emp ? emp.outlet : '', joined:todayStr(), days:{} };
+        p = { id, name: emp ? emp.name : typedName, outlet: emp ? emp.outlet : pickedOutlet, joined:todayStr(), days:{} };
         await kvSet(PLAYER_PREFIX+id, JSON.stringify(p)); players.push(p);
       } else if (emp && (p.name!==emp.name || p.outlet!==emp.outlet)){
         p.name = emp.name; p.outlet = emp.outlet; // keep in sync if the roster changes later
+        await kvSet(PLAYER_PREFIX+p.id, JSON.stringify(p));
+      } else if (needsName){
+        p.name = typedName; if (pickedOutlet) p.outlet = pickedOutlet;
         await kvSet(PLAYER_PREFIX+p.id, JSON.stringify(p));
       }
       me = p;
@@ -2375,18 +2502,19 @@ async function dailyPlay(){
 }
 function dailyDone(){
   const mine = me.days[todayStr()] || [], right = mine.filter(a=>a.ok).length;
-  const rows = leaderboard(), myRow = rows.find(r=>r.p.id===me.id);
+  const myRow = leaderboardFor('overall', todayStr()).rows.find(r=>r.p.id===me.id);
   $('dailyBox').innerHTML = langSwitcher() + `<div class="result ${right===mine.length?'pass':right?'':'fail'}" style="${right && right<mine.length?'background:var(--amber-bg);color:var(--amber)':''}">
       <div class="big">${right}/${mine.length}</div>
       <div class="word">${right===mine.length?t('perfect'):right?t('good'):t('luck')}</div>
-      <p>${myRow?`${t('youAre')} #${myRow.rank} · ${myRow.score} pts`:''}</p></div>
+      <p>${myRow?`${t('youAre')} #${myRow.rank} · ${myRow.correct} pts${myRow.tier?' · '+myRow.tier.icon+' '+myRow.tier.label:''}`:''}</p></div>
     <p class="note" style="text-align:center">${t('tomorrow')}</p>
     <div class="row" style="justify-content:center;margin-top:10px"><button class="btn primary" id="viewMyAnswers" style="padding:12px 22px;border-radius:12px">View my answers</button></div>
     <div id="myAnswersBox"></div>`;
   bindLangSwitcher(dailyDone);
   $('viewMyAnswers').onclick = ()=>{ $('viewMyAnswers').remove(); $('myAnswersBox').innerHTML = renderPlayerAnswers(me, todayStr()); };
   $('dailyBoard').classList.remove('hidden');
-  $('dailyBoard').innerHTML = '<h2>Top 10</h2>' + lbTable(rows, me.id);
+  $('dailyBoard').innerHTML = '<h2>Leaderboard</h2><div id="dailyLb"></div>';
+  lbRender('daily', 'dailyLb', { meId: me.id });
 }
 
 // ---- Admin side
@@ -2395,6 +2523,18 @@ function dailyDone(){
 // automatically every time the quiz panel loads or refreshes, no one needs to log in again for it to fix.
 // "045" and "45" are the same Employee ID — compare with leading zeros stripped everywhere IDs are matched.
 const normEmpId = id => String(id||'').trim().replace(/^0+(?=\d)/, '');
+// The owner's own trial runs are labelled "(Owner)" wherever a person is listed, so they're obvious at a
+// glance. Matched on the Employee ID only — never the name — because other people share similar names
+// (e.g. the Area Manager, Mohammed Asif Khasim, is a different person).
+const OWNER_ID = '507';
+const isOwnerId = id => !!id && normEmpId(id) === OWNER_ID;
+const shownName = (name, id) => isOwnerId(id) ? '(Owner)' : name;
+const rosterEntry = id => employees.find(e=>normEmpId(e.id)===normEmpId(id));
+const isPlaceholderName = n => /^Staff \d+$/.test(String(n||'').trim());
+// Names/outlets are looked up from the staff roster at the moment they're shown, so a stale saved name
+// ("Staff 123") can never hide a name the roster already has.
+function playerName(p){ const e = rosterEntry(p.id); return shownName(e ? e.name : p.name, p.id); }
+function playerOutletId(p){ const e = rosterEntry(p.id); return e ? e.outlet : p.outlet; }
 async function syncPlayersWithRoster(){
   const writes = [];
   players.forEach(p=>{
@@ -2416,11 +2556,10 @@ async function openQuizAdmin(){
   $('quizLink').textContent = url;
   $('quizShare').href = 'https://wa.me/?text=' + encodeURIComponent(`Daily quiz is live! 3 quick questions every day. Top 10 on the leaderboard get the bragging rights. Play here: ${url}`);
   $('quizCopy').onclick = async ()=>{ try{ await navigator.clipboard.writeText(url); toast('Link copied'); }catch(e){ prompt('Copy this link:', url); } };
-  const rows = leaderboard(), today = todayStr();
+  const today = todayStr();
   const played = players.filter(p=>(p.days||{})[today] && p.days[today].length).length;
   $('quizStats').textContent = `${players.length} staff joined · ${played} played today`;
-  $('quizLb').innerHTML = lbTable(rows, null, true);
-  bindLbClicks();
+  lbRender('admin', 'quizLb', { clickable:true, allowAll:true });
   const isMaster = level==='master';
   $('quizPoolInfo').textContent = (dishQuestions().length?`${dishQuestions().length} dish questions are created automatically from the Dish bank. `:'') +
     (examQuestions().length?`${examQuestions().length} questions are pulled automatically from uploaded exams (mcq, true/false and short-answer text questions — list and manual questions aren't used for the quiz). `:'') +
@@ -2430,26 +2569,84 @@ async function openQuizAdmin(){
   renderParticipation();
   startLive(refreshQuizLive, 20000); // leaderboard and participation keep updating without a manual reload
 }
-function bindLbClicks(){
-  document.querySelectorAll('#quizLb tr[data-pid]').forEach(tr=>tr.onclick=()=>toggleInlineResult(tr));
-}
 // Opens right under the clicked name, inside the leaderboard itself — no separate box, no scrolling to find it.
-function toggleInlineResult(tr){
+// Shows the answers for whichever date the leaderboard is currently set to.
+async function deleteQuizResults(playerId, dateStr){
+  const raw = await kvGet(PLAYER_PREFIX+playerId, true);
+  if (!raw) throw new Error('player not found');
+  const fresh = JSON.parse(raw);
+  fresh.days = fresh.days || {};
+  if (dateStr) delete fresh.days[dateStr]; else fresh.days = {};   // dateStr null = every day
+  await kvSet(PLAYER_PREFIX+playerId, JSON.stringify(fresh));
+  const p = players.find(x=>x.id===playerId); if (p) p.days = fresh.days;
+}
+async function renamePlayer(playerId, name, outlet){
+  const fresh = JSON.parse(await kvGet(PLAYER_PREFIX+playerId, true));
+  fresh.name = name; fresh.outlet = outlet || '';
+  await kvSet(PLAYER_PREFIX+playerId, JSON.stringify(fresh));
+  const p = players.find(x=>x.id===playerId); if (p){ p.name = name; p.outlet = outlet || ''; }
+}
+function redrawQuizAdmin(){
+  const today = todayStr();
+  const played = players.filter(p=>(p.days||{})[today] && p.days[today].length).length;
+  $('quizStats').textContent = `${players.length} staff joined · ${played} played today`;
+  lbRender('admin', 'quizLb', { clickable:true, allowAll:true }, true);
+  renderParticipation();
+}
+function toggleInlineResult(tr, dateStr, root){
   const next = tr.nextElementSibling;
   if (next && next.classList.contains('pd-row')){ next.remove(); return; } // tap again to close
-  document.querySelectorAll('#quizLb tr.pd-row').forEach(r=>r.remove()); // only one open at a time
+  root.querySelectorAll('tr.pd-row').forEach(r=>r.remove()); // only one open at a time
   const p = players.find(x=>x.id===tr.dataset.pid); if (!p) return;
-  const today = todayStr(), profile = categoryProfile(p);
+  const profile = categoryProfile(p);
+  const label = dateStr===todayStr() ? "Today's questions & answers" : 'Questions & answers — '+fmtDate(dateStr);
+  // Master only: remove trial results, and set a proper name for anyone who isn't in the staff roster.
+  const hasDay = ((p.days||{})[dateStr]||[]).length > 0;
+  const totalDays = Object.keys(p.days||{}).filter(d=>(p.days[d]||[]).length).length;
+  const adminTools = level!=='master' ? '' : `
+    ${rosterEntry(p.id) ? '' : `<div class="sofar-h" style="margin-top:12px">Not in the staff roster — how they appear</div>
+      <div class="row" style="gap:6px;flex-wrap:wrap"><input data-rn-name value="${esc(p.name)}" style="flex:1;min-width:150px">
+        <select data-rn-outlet style="min-width:150px"><option value="">No outlet</option>${outlets.map(o=>`<option value="${esc(o.id)}"${o.id===p.outlet?' selected':''}>${esc(o.name)}</option>`).join('')}</select>
+        <button class="btn small primary" data-rn-save>Save</button></div>`}
+    <div class="sofar-h" style="margin-top:12px">Remove trial results</div>
+    <div class="row" style="gap:6px;flex-wrap:wrap">
+      ${hasDay ? `<button class="btn small danger" data-del-day>Delete this day's result</button>` : ''}
+      <button class="btn small danger" data-del-all${totalDays?'':' disabled'}>Delete all results</button></div>`;
   const row = document.createElement('tr');
   row.className = 'pd-row';
   row.innerHTML = `<td colspan="3" style="background:var(--bg);padding:12px">
-    <div class="sofar-h">Today's questions & answers</div>
-    ${renderPlayerAnswers(p, today)}
+    <div class="sofar-h">${esc(label)}</div>
+    ${renderPlayerAnswers(p, dateStr)}
     ${profile.length ? `<div class="sofar-h" style="margin-top:10px">Strengths & weaknesses</div>` + profile.map(c=>
       `<div class="row" style="justify-content:space-between;padding:3px 0"><span>${esc(c.cat)}</span><b style="color:${c.pct<60?'var(--red)':c.pct>=85?'var(--green)':'var(--amber)'}">${c.pct}% (${c.right}/${c.total})</b></div>`
     ).join('') : ''}
+    ${adminTools}
   </td>`;
   tr.insertAdjacentElement('afterend', row);
+  if (level!=='master') return;
+  const dn = playerName(p);
+  const delDay = row.querySelector('[data-del-day]');
+  if (delDay) delDay.onclick = async ()=>{
+    if (!confirm(`Delete ${dn}'s quiz result for ${fmtDate(dateStr)}?\n\nThis can't be undone.`)) return;
+    delDay.disabled = true;
+    try{ await deleteQuizResults(p.id, dateStr); toast('Result deleted'); redrawQuizAdmin(); }
+    catch(e){ toast('Could not delete. Check your internet.'); delDay.disabled = false; }
+  };
+  const delAll = row.querySelector('[data-del-all]');
+  if (delAll) delAll.onclick = async ()=>{
+    if (!confirm(`Delete ALL quiz results for ${dn} (${totalDays} day${totalDays===1?'':'s'})?\n\nThey will disappear from the leaderboard and participation. This can't be undone.`)) return;
+    delAll.disabled = true;
+    try{ await deleteQuizResults(p.id, null); toast('All results deleted'); redrawQuizAdmin(); }
+    catch(e){ toast('Could not delete. Check your internet.'); delAll.disabled = false; }
+  };
+  const rnSave = row.querySelector('[data-rn-save]');
+  if (rnSave) rnSave.onclick = async ()=>{
+    const nm = row.querySelector('[data-rn-name]').value.trim().replace(/\s+/g,' ');
+    if (nm.length < 2) return toast('Type their name first.');
+    rnSave.disabled = true;
+    try{ await renamePlayer(p.id, nm, row.querySelector('[data-rn-outlet]').value); toast('Saved'); redrawQuizAdmin(); }
+    catch(e){ toast('Could not save. Check your internet.'); rnSave.disabled = false; }
+  };
 }
 // Lighter refresh for the quiz panel — updates the leaderboard and participation only, so it doesn't
 // disturb a pass-mark field or a file upload someone might be mid-way through on the rest of the screen.
@@ -2457,11 +2654,12 @@ async function refreshQuizLive(){
   if ($('quizView').classList.contains('hidden')) return;
   try{ await loadQuiz(); }catch(e){ return; }
   await syncPlayersWithRoster();
-  const rows = leaderboard(), today = todayStr();
+  const today = todayStr();
   const played = players.filter(p=>(p.days||{})[today] && p.days[today].length).length;
   $('quizStats').textContent = `${players.length} staff joined · ${played} played today`;
-  $('quizLb').innerHTML = lbTable(rows, null, true);
-  bindLbClicks();
+  // Only the table is redrawn (the date picker is left alone), and not at all while a result is open,
+  // so the 20-second refresh never closes something you're in the middle of reading.
+  if (!document.querySelector('#quizLb tr.pd-row')) lbRender('admin', 'quizLb', { clickable:true, allowAll:true }, true);
   renderParticipation();
 }
 
@@ -2514,7 +2712,7 @@ function renderParticipation(){
   const list = r.perEmployee.filter(e=>e.outlet===partOutlet && (!q || norm(e.name).includes(q) || e.id.includes(q)))
     .sort((a,b)=> b.daysPlayed-a.daysPlayed || a.name.localeCompare(b.name));
   $('nonTodayTable').innerHTML = list.length ? list.map(x=>
-    `<tr${!x.participated?' style="background:var(--red-bg)"':''} data-pid="${esc(x.id)}" style="cursor:pointer"><td>${esc(x.name)}</td><td>${esc(x.id)}</td><td>${partPeriod==='day' ? (x.participated?'Yes':'No') : x.daysPlayed+' day'+(x.daysPlayed===1?'':'s')}</td></tr>`
+    `<tr${!x.participated?' style="background:var(--red-bg)"':''} data-pid="${esc(x.id)}" style="cursor:pointer"><td>${esc(shownName(x.name, x.id))}</td><td>${esc(x.id)}</td><td>${partPeriod==='day' ? (x.participated?'Yes':'No') : x.daysPlayed+' day'+(x.daysPlayed===1?'':'s')}</td></tr>`
   ).join('') : '<tr><td colspan="3" class="note">No staff match.</td></tr>';
   $('nonTodayTable').querySelectorAll('[data-pid]').forEach(tr=>tr.onclick=()=>openPlayerDetail(tr.dataset.pid));
 }
@@ -2559,8 +2757,8 @@ function openPlayerDetail(playerId){
   const profile = categoryProfile(p);
   const days = Object.keys(p.days||{}).sort().reverse().slice(0,14);
   const latest = days[0];
-  box.innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(p.name)}</h2><button class="btn small" id="pdClose">Close</button></div>
-    <p class="note" style="margin-top:0">${esc(outletName(p.outlet)||'No outlet')}</p>
+  box.innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(playerName(p))}</h2><button class="btn small" id="pdClose">Close</button></div>
+    <p class="note" style="margin-top:0">${esc(outletName(playerOutletId(p))||'No outlet')}</p>
     ${profile.length ? `<h3>Strengths & weaknesses</h3>` + profile.map(c=>
       `<div class="row" style="justify-content:space-between;padding:4px 0;border-top:1px solid var(--line)"><span>${esc(c.cat)}</span><b style="color:${c.pct<60?'var(--red)':c.pct>=85?'var(--green)':'var(--amber)'}">${c.pct}% (${c.right}/${c.total})</b></div>`
     ).join('') : '<p class="note">No answers yet.</p>'}
@@ -2596,7 +2794,7 @@ function todayEvents(){
 function eventsSectionHtml(title, rows){
   if (!rows.length) return '';
   return `<h3 style="margin:14px 0 4px">${title}</h3>` +
-    rows.map(h=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)"><b>${esc(h.name)}</b><span class="note">${h.years?h.years+' year'+(h.years>1?'s':''):''} · ${esc(outletName(h.outlet)||h.dept||'-')}</span></div>`).join('');
+    rows.map(h=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)"><b>${esc(shownName(h.name, h.id))}</b><span class="note">${h.years?h.years+' year'+(h.years>1?'s':''):''} · ${esc(outletName(h.outlet)||h.dept||'-')}</span></div>`).join('');
 }
 function renderAnniversaryPopup(){
   if ((level!=='master' && level!=='viewer') || anniversaryShown || !employees.length) return;
@@ -2733,7 +2931,7 @@ function renderRosterList(){
     .sort((a,b)=>a.name.localeCompare(b.name));
   const isM = level==='master';
   const outletOpts = `<option value="">No outlet</option>` + outlets.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
-  $('rosterTable').innerHTML = rows.length ? rows.map(e=>`<tr><td>${esc(e.id)}</td><td>${esc(e.name)}</td>
+  $('rosterTable').innerHTML = rows.length ? rows.map(e=>`<tr><td>${esc(e.id)}</td><td>${esc(shownName(e.name, e.id))}</td>
       <td>${isM ? `<select data-emp-outlet="${esc(e.id)}" style="width:100%">${outletOpts}</select>` : esc(outletName(e.outlet)||'No outlet')}</td>
       <td>${e.joined?fmtDate(e.joined):'-'}</td></tr>`).join('')
     : `<tr><td colspan="4" class="note">${employees.length?'No matches — try a different name or outlet.':'No staff imported yet. Upload the CSV above.'}</td></tr>`;
@@ -2853,11 +3051,13 @@ $('quizBack').onclick = ()=>{ show('listView'); renderOverview(); };
 // standard ".btn" action-button class gets disabled, plus every file/number input and every <select>.
 // This runs on every DOM change (MutationObserver), so it covers every screen automatically rather than
 // needing every render function in the app to remember to call it.
+// Pure view controls (they change what's displayed, never what's saved) — so the view-only link can still use them.
+const VIEWER_SAFE_ATTRS = ['data-dview','data-prev','data-lbmode','data-lbstep','data-lbtoday','data-lbshow','data-period'];
 const VIEWER_SAFE_IDS = new Set(['backBtn','bankBack','quizBack','rosterBack','dishBtn','quizBtn','bankBtn','rosterBtn','jGo','pwGo']);
 function lockdownForViewer(){
   if (level!=='viewer') return;
   document.querySelectorAll('#app button.btn').forEach(el=>{
-    const safe = VIEWER_SAFE_IDS.has(el.id) || el.hasAttribute('data-dview') || el.hasAttribute('data-prev');
+    const safe = VIEWER_SAFE_IDS.has(el.id) || VIEWER_SAFE_ATTRS.some(a=>el.hasAttribute(a));
     el.disabled = !safe;
   });
   document.querySelectorAll('#app button.chk').forEach(el=>{ el.disabled = true; }); // per-topic training checklist ticks
