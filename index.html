@@ -323,7 +323,7 @@
         <div class="row"><a class="btn primary" id="quizShare" target="_blank" style="text-decoration:none">Share on WhatsApp</a><button class="btn" id="quizCopy">Copy link</button></div>
         <p class="note" id="quizStats" style="margin-top:10px"></p>
       </div>
-      <div class="card"><h2>Leaderboard</h2><div id="quizLb"></div><p class="note">Tap a name to see that day's questions and answers, plus their strong and weak topics.</p></div>
+      <div class="card"><h2>Leaderboards</h2><div id="quizLb"></div><p class="note">Staff board: tap a name to see that day's questions and answers, plus their strong and weak topics. Outlets board: tap an outlet to see every one of its staff.</p></div>
       <div class="card">
         <h2>Participation by outlet</h2>
         <div class="row" style="margin-bottom:8px"><button class="btn small" data-period="day">Day</button><button class="btn small" data-period="week">Week</button><button class="btn small" data-period="month">Month</button></div>
@@ -2269,23 +2269,118 @@ function lbTableHtml(data, st, opts){
   const toggle = (opts.allowAll && rows.length>10) ? `<div class="row" style="justify-content:center;margin-top:8px"><button class="btn small" data-lbshow>${showAll?'Show top 10':'Show all '+rows.length}</button></div>` : '';
   return `<table class="lb">${shown.map(tr).join('')}${extra}</table>${toggle}${caption}`;
 }
+// ---- Outlet leaderboard: graded the same way as staff, but as the AVERAGE of every staff member ----
+// A person's score is (share of days they played) x (share of answers they got right). An outlet's score is
+// the average of that across ALL of its staff, and anyone who never played counts as 0. So a few stars, or
+// one lucky 3/3, can't carry an outlet; a big team isn't favoured over a small one; and a steady team where
+// most people play beats one where only a few take part. Thresholds are lower than the individual tiers
+// because it is a team average — change them here to tune.
+const OUTLET_TIERS = [
+  { key:'diamond', label:'Diamond', icon:'💎', minParticipation:0.70, minAccuracy:0.80 },
+  { key:'gold',    label:'Gold',    icon:'🥇', minParticipation:0.50, minAccuracy:0.65 },
+  { key:'silver',  label:'Silver',  icon:'🥈', minParticipation:0.30, minAccuracy:0.50 }
+];
+function outletTierFor(activeDays, avgParticipation, accuracy){
+  if (activeDays < LB_MIN_DAYS) return null;
+  return OUTLET_TIERS.find(t=>avgParticipation>=t.minParticipation && accuracy>=t.minAccuracy) || null;
+}
+function firstPlayDate(p){ let f = null; Object.entries(p.days||{}).forEach(([d,a])=>{ if (a && a.length && (!f || d<f)) f = d; }); return f; }
+function outletBoardFor(mode, dateStr){
+  const to = clampLbDate(dateStr), seasonFrom = qCfg.start, from = mode==='day' ? to : seasonFrom;
+  const valid = new Set(outlets.map(o=>o.id)), people = new Map();
+  // Everyone who belongs to an outlet: roster staff (their roster outlet), plus players outside the roster
+  // who picked an outlet themselves. Head-office staff have no outlet, so they are not part of any outlet.
+  employees.forEach(e=>{ if (e.outlet && valid.has(e.outlet)) people.set(normEmpId(e.id), { id:e.id, name:e.name, outlet:e.outlet, joined:e.joined||null, p:null }); });
+  players.forEach(p=>{
+    const key = normEmpId(p.id), have = people.get(key);
+    if (have){ have.p = p; return; }
+    if (rosterEntry(p.id)) return;                       // roster person without an outlet = head office
+    if (p.outlet && valid.has(p.outlet)) people.set(key, { id:p.id, name:p.name, outlet:p.outlet, joined:firstPlayDate(p) || p.joined || null, p });
+  });
+  const groups = {};
+  people.forEach(person=>{
+    // Measured from the day they joined (or the period start), so a recent joiner isn't blamed for weeks
+    // before they existed — but anyone who has joined and doesn't play counts as zero.
+    const startDate = (person.joined && person.joined > from) ? person.joined : from;
+    if (startDate > to) return;                           // hadn't joined yet on that date
+    const span = Math.max(1, lbDays(startDate, to));
+    const g = groups[person.outlet] = groups[person.outlet] || { outlet:person.outlet, staff:[], dates:new Set() };
+    let correct=0, answered=0, daysPlayed=0;
+    if (person.p) Object.entries(person.p.days||{}).forEach(([date,arr])=>{
+      if (!arr || !arr.length || date < from || date > to) return;
+      daysPlayed++; g.dates.add(date); arr.forEach(a=>{ answered++; if (a.ok) correct++; });
+    });
+    const participation = Math.min(1, daysPlayed / span), accuracy = answered ? correct/answered : 0;
+    g.staff.push({ person, correct, answered, daysPlayed, span, participation, accuracy });
+  });
+  const rows = Object.values(groups).map(g=>{
+    const N = g.staff.length, participants = g.staff.filter(x=>x.daysPlayed>0).length;
+    const totalCorrect = g.staff.reduce((t,x)=>t+x.correct,0), totalAnswered = g.staff.reduce((t,x)=>t+x.answered,0);
+    const avgParticipation = g.staff.reduce((t,x)=>t+x.participation,0) / N;
+    const accuracy = totalAnswered ? totalCorrect/totalAnswered : 0;
+    const score = g.staff.reduce((t,x)=>t + x.participation*x.accuracy, 0) / N;      // 0..1, non-players count as 0
+    return { outlet:g.outlet, name:outletName(g.outlet), staff:g.staff, N, participants, avgParticipation, accuracy, score, activeDays:g.dates.size,
+      tier: mode==='day' ? null : outletTierFor(g.dates.size, avgParticipation, accuracy) };
+  });
+  const tierOrder = r => r.tier ? OUTLET_TIERS.indexOf(r.tier) : OUTLET_TIERS.length;
+  rows.sort(mode==='day'
+    ? (a,b)=> b.score-a.score || b.participants-a.participants || a.name.localeCompare(b.name)
+    : (a,b)=> tierOrder(a)-tierOrder(b) || b.score-a.score || b.participants-a.participants || a.name.localeCompare(b.name));
+  rows.forEach((r,i)=>{ r.rank = i+1; });
+  return { rows, mode, from, to };
+}
+function outletNoteText(data){
+  const how = `Outlet score (out of 100) is the average of every staff member's score — each person's score is how often they played × how many they got right, and staff who never played count as 0. So a few stars or one lucky 3/3 can't carry an outlet; steady teams win.`;
+  if (data.mode==='day') return `Showing ${fmtDate(data.to)} only. ${how} Tiers look at the whole season, so they appear on the Overall view.`;
+  const tiers = OUTLET_TIERS.map(t=>`${t.icon} ${t.label}: staff play ${Math.round(t.minParticipation*100)}%+ of days on average with ${Math.round(t.minAccuracy*100)}%+ correct`).join(' · ');
+  return `${data.to===todayStr() ? 'Overall up to today' : 'Overall up to '+fmtDate(data.to)}. ${how} Ranked by tier, then score. ${tiers}. A tier needs at least ${LB_MIN_DAYS} days of play. Season started ${fmtDate(qCfg.start)}.`;
+}
+function outletTableHtml(data, st, opts){
+  const { rows, mode } = data, caption = `<p class="note">${outletNoteText(data)}</p>`;
+  if (!rows.length) return `<p class="note">No outlets with staff yet — import the staff roster so each outlet has its people.</p>${caption}`;
+  const stats = r => r.participants===0 ? `${r.N} staff · no one has played${mode==='day'?' that day':' yet'}`
+    : `${r.participants}/${r.N} staff played${mode==='day'?'':' · '+Math.round(r.avgParticipation*100)+'% of days'} · ${Math.round(r.accuracy*100)}% correct`;
+  const tr = r=>`<tr class="${opts.myOutlet && r.outlet===opts.myOutlet?'me':''} ${r.rank<=3?'top'+r.rank:''}" ${opts.clickable?`data-oid="${esc(r.outlet)}" style="cursor:pointer"`:''}><td class="rk">${r.rank}</td><td>${esc(r.name)}${tierBadge(r.tier)}<div class="note" style="margin:0">${stats(r)}</div></td><td style="text-align:right;white-space:nowrap"><b style="font-size:18px">${Math.round(r.score*100)}</b><span class="note" style="margin:0">/100</span></td></tr>`;
+  return `<table class="lb">${rows.map(tr).join('')}</table>${caption}`;
+}
+// Tap an outlet (admin) to see every one of its staff, most active first, with the ones who never played last.
+function toggleOutletRow(tr, data, root){
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('pd-row')){ next.remove(); return; }
+  root.querySelectorAll('tr.pd-row').forEach(r=>r.remove());
+  const r = data.rows.find(x=>x.outlet===tr.dataset.oid); if (!r) return;
+  const list = [...r.staff].sort((a,b)=> (b.participation*b.accuracy)-(a.participation*a.accuracy) || b.daysPlayed-a.daysPlayed || a.person.name.localeCompare(b.person.name));
+  const row = document.createElement('tr');
+  row.className = 'pd-row';
+  row.innerHTML = `<td colspan="3" style="background:var(--bg);padding:12px"><div class="sofar-h">${esc(r.name)} — every staff member</div>` +
+    list.map(x=>`<div class="row" style="justify-content:space-between;padding:3px 0;${x.daysPlayed?'':'color:var(--red)'}"><span>${esc(shownName(x.person.name, x.person.id))}</span><b>${x.daysPlayed ? x.daysPlayed+'/'+x.span+' days · '+Math.round(x.accuracy*100)+'% correct' : 'has not played'}</b></div>`).join('') + `</td>`;
+  tr.insertAdjacentElement('afterend', row);
+}
+
 // One leaderboard component used by the admin panel, the boss's view-only link and the staff result screen.
-// Its mode/date live in lbStates (not the DOM) so the 20-second auto-refresh can redraw just the table
+// It shows either the Staff board or the Outlets board, with the same Overall / By day + date controls.
+// Its board/mode/date live in lbStates (not the DOM) so the 20-second auto-refresh can redraw just the table
 // without closing a date picker someone is in the middle of using.
 const lbStates = {};
 function lbRender(key, containerId, opts={}, tableOnly=false){
   const el = $(containerId); if (!el) return;
-  const st = lbStates[key] = lbStates[key] || { mode:'overall', date:todayStr(), showAll:false };
+  const st = lbStates[key] = lbStates[key] || { board:'staff', mode:'overall', date:todayStr(), showAll:false };
   st.date = clampLbDate(st.date);
-  const data = leaderboardFor(st.mode, st.date), tblHtml = lbTableHtml(data, st, opts);
+  const isOutlet = st.board==='outlet';
+  const data = isOutlet ? outletBoardFor(st.mode, st.date) : leaderboardFor(st.mode, st.date);
+  const tblHtml = isOutlet ? outletTableHtml(data, st, opts) : lbTableHtml(data, st, opts);
   const redo = ()=>lbRender(key, containerId, opts);
   const bindRows = ()=>{
+    if (isOutlet){ el.querySelectorAll('tr[data-oid]').forEach(tr=>tr.onclick=()=>toggleOutletRow(tr, data, el)); return; }
     el.querySelectorAll('tr[data-pid]').forEach(tr=>tr.onclick=()=>toggleInlineResult(tr, st.date, el));
     const sh = el.querySelector('[data-lbshow]'); if (sh) sh.onclick = ()=>{ st.showAll = !st.showAll; redo(); };
   };
   const tbl = el.querySelector('.lbtbl');
   if (tableOnly && tbl){ tbl.innerHTML = tblHtml; bindRows(); return; }
   el.innerHTML = `<div class="lbctl">
+      <button class="btn small ${!isOutlet?'primary':''}" data-lbboard="staff">Staff</button>
+      <button class="btn small ${isOutlet?'primary':''}" data-lbboard="outlet">Outlets</button>
+    </div><div class="lbctl">
       <button class="btn small ${st.mode==='overall'?'primary':''}" data-lbmode="overall">Overall</button>
       <button class="btn small ${st.mode==='day'?'primary':''}" data-lbmode="day">By day</button>
       <button class="btn small" data-lbstep="-1" aria-label="Previous day">‹</button>
@@ -2293,6 +2388,7 @@ function lbRender(key, containerId, opts={}, tableOnly=false){
       <button class="btn small" data-lbstep="1" aria-label="Next day">›</button>
       <button class="btn small" data-lbtoday>Today</button>
     </div><div class="lbtbl">${tblHtml}</div>`;
+  el.querySelectorAll('[data-lbboard]').forEach(b=>b.onclick=()=>{ st.board = b.dataset.lbboard; st.showAll = false; redo(); });
   el.querySelectorAll('[data-lbmode]').forEach(b=>b.onclick=()=>{ st.mode = b.dataset.lbmode; st.showAll = false; redo(); });
   el.querySelectorAll('[data-lbstep]').forEach(b=>b.onclick=()=>{ st.date = clampLbDate(shiftDate(st.date, +b.dataset.lbstep)); redo(); });
   el.querySelector('[data-lbtoday]').onclick = ()=>{ st.date = todayStr(); redo(); };
@@ -2503,10 +2599,12 @@ async function dailyPlay(){
 function dailyDone(){
   const mine = me.days[todayStr()] || [], right = mine.filter(a=>a.ok).length;
   const myRow = leaderboardFor('overall', todayStr()).rows.find(r=>r.p.id===me.id);
+  const outletRows = outletBoardFor('overall', todayStr()).rows, myOutletId = playerOutletId(me), myOutletRow = outletRows.find(r=>r.outlet===myOutletId);
   $('dailyBox').innerHTML = langSwitcher() + `<div class="result ${right===mine.length?'pass':right?'':'fail'}" style="${right && right<mine.length?'background:var(--amber-bg);color:var(--amber)':''}">
       <div class="big">${right}/${mine.length}</div>
       <div class="word">${right===mine.length?t('perfect'):right?t('good'):t('luck')}</div>
-      <p>${myRow?`${t('youAre')} #${myRow.rank} · ${myRow.correct} pts${myRow.tier?' · '+myRow.tier.icon+' '+myRow.tier.label:''}`:''}</p></div>
+      <p>${myRow?`${t('youAre')} #${myRow.rank} · ${myRow.correct} pts${myRow.tier?' · '+myRow.tier.icon+' '+myRow.tier.label:''}`:''}</p>
+      ${myOutletRow?`<p style="margin-top:4px">${esc(myOutletRow.name)} is #${myOutletRow.rank} of ${outletRows.length} outlets${myOutletRow.tier?' · '+myOutletRow.tier.icon+' '+myOutletRow.tier.label:''}</p>`:''}</div>
     <p class="note" style="text-align:center">${t('tomorrow')}</p>
     <div class="row" style="justify-content:center;margin-top:10px"><button class="btn primary" id="viewMyAnswers" style="padding:12px 22px;border-radius:12px">View my answers</button></div>
     <div id="myAnswersBox"></div>`;
@@ -2514,7 +2612,7 @@ function dailyDone(){
   $('viewMyAnswers').onclick = ()=>{ $('viewMyAnswers').remove(); $('myAnswersBox').innerHTML = renderPlayerAnswers(me, todayStr()); };
   $('dailyBoard').classList.remove('hidden');
   $('dailyBoard').innerHTML = '<h2>Leaderboard</h2><div id="dailyLb"></div>';
-  lbRender('daily', 'dailyLb', { meId: me.id });
+  lbRender('daily', 'dailyLb', { meId: me.id, myOutlet: myOutletId });
 }
 
 // ---- Admin side
@@ -3052,7 +3150,7 @@ $('quizBack').onclick = ()=>{ show('listView'); renderOverview(); };
 // This runs on every DOM change (MutationObserver), so it covers every screen automatically rather than
 // needing every render function in the app to remember to call it.
 // Pure view controls (they change what's displayed, never what's saved) — so the view-only link can still use them.
-const VIEWER_SAFE_ATTRS = ['data-dview','data-prev','data-lbmode','data-lbstep','data-lbtoday','data-lbshow','data-period'];
+const VIEWER_SAFE_ATTRS = ['data-dview','data-prev','data-lbboard','data-lbmode','data-lbstep','data-lbtoday','data-lbshow','data-period'];
 const VIEWER_SAFE_IDS = new Set(['backBtn','bankBack','quizBack','rosterBack','dishBtn','quizBtn','bankBtn','rosterBtn','jGo','pwGo']);
 function lockdownForViewer(){
   if (level!=='viewer') return;
